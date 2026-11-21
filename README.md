@@ -9,6 +9,13 @@
 
 > 仅研究与演示动效，不隶属于 Telegram，也不包含官方客户端代码。
 
+## Telegram Web 风格与图标
+
+- 参考 [morethanwords/tweb](https://github.com/morethanwords/tweb) 的聊天界面层级、圆形头像、消息气泡与左右分栏。**不是 Telegram 的完整客户端，也不接入 Telegram API。**
+- 使用 [Lucide](https://lucide.dev/) 的 `lucide-vue-next` 统一主要操作图标。
+- 默认浅色主题；顶部月亮 / 太阳按钮可切换深浅色。动效设置面板可收起。
+- 动效仍是本项目的独立实现；未复制 tweb 的源代码、图片、字体或品牌素材。若将来直接移植 tweb 的代码，应遵守其 GPL-3.0 许可证。
+
 ## 本地运行
 
 Node.js 20.19+ 或 22.12+：
