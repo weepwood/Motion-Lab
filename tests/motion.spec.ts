@@ -1,5 +1,17 @@
 import { expect, test } from '@playwright/test'
 
+test('default appearance matches messenger layout and settings remain optional', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('.workspace')).toBeVisible()
+  await expect(page.locator('.topbar')).toHaveCount(0)
+  await expect(page.locator('.statusbar')).toHaveCount(0)
+  await expect(page.locator('.inspector')).toHaveCount(0)
+  await page.getByRole('button', {name:'打开动效设置'}).first().click()
+  await expect(page.getByRole('complementary', {name:'动效实验设置'})).toBeVisible()
+  await page.getByRole('button', {name:'关闭动效设置'}).click()
+  await expect(page.locator('.inspector')).toHaveCount(0)
+})
+
 test('message flight settles and leaves visible bubble', async ({ page }) => {
   await page.goto('/')
   const input = page.getByRole('textbox', {name:'消息内容'})
@@ -29,6 +41,7 @@ test('anchored context menu stays inside viewport and closes', async ({ page }) 
 
 test('theme choice persists through reload', async ({ page }) => {
   await page.goto('/')
+  await page.getByRole('button',{name:'打开动效设置'}).first().click()
   await page.getByRole('button',{name:'深色',exact:true}).click()
   await expect(page.locator('.app-shell')).toHaveClass(/theme-dark/)
   await page.reload()
@@ -55,6 +68,7 @@ test('rapid chat switches and multiple sends clean up animations', async ({ page
 
 test('500 messages are kept in bounded DOM and older messages can be loaded', async ({ page }) => {
   await page.goto('/')
+  await page.getByRole('button',{name:'打开动效设置'}).first().click()
   await page.getByRole('button',{name:/压力测试/}).click()
   await expect(page.locator('.message-row')).toHaveCount(120)
   const load = page.getByRole('button',{name:/查看更早的/})
