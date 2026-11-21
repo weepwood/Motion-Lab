@@ -58,7 +58,7 @@ function setTheme(value: 'light' | 'dark') {
   try { localStorage.setItem('motion-lab-theme', value) } catch { /* Storage may be disabled */ }
 }
 function toggleTheme() { setTheme(theme.value === 'light' ? 'dark' : 'light') }
-const inspectorOpen = ref(true)
+const inspectorOpen = ref(false)
 const mobileChats = ref(false)
 const showEmoji = ref(false)
 const showAbout = ref(false)
@@ -261,7 +261,7 @@ function runDemo(key: string) {
   else if (key === 'micro') { notice('这是一个轻量微交互反馈 ✨'); compact.value = !compact.value }
 }
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') { menu.value = null; showEmoji.value = false; showAbout.value = false }
+  if (e.key === 'Escape') { menu.value = null; showEmoji.value = false; showAbout.value = false; inspectorOpen.value = false }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); mobileChats.value = true; void nextTick(() => searchInput.value?.focus()) }
 }
 const onMediaChange = (e: MediaQueryListEvent) => { osReduced.value = e.matches }
@@ -308,25 +308,15 @@ const demos = [
   <div ref="stageRef" class="app-shell" :class="{ compact, 'reduce-animations': reduced, 'theme-light':theme === 'light', 'theme-dark':theme === 'dark', 'inspector-hidden':!inspectorOpen }" :style="vars">
     <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
     <div class="app-frame">
-      <header class="topbar">
-        <div class="topbar-left">
-          <span class="brand-symbol"><MessageCircle :size="21" :stroke-width="2.4" /></span>
-          <div class="brand-title"><strong>Motion Lab</strong><span class="brand-caption">Telegram-inspired motion playground</span></div>
-          <span class="version">v1.0</span>
-        </div>
-        <div class="topbar-right">
-          <span class="topbar-status"><i class="status-light"></i> 本地交互演示</span>
-          <button class="icon-btn" :title="theme === 'light' ? '切换深色主题' : '切换浅色主题'" :aria-label="theme === 'light' ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><Moon v-if="theme === 'light'" :size="20"/><Sun v-else :size="20"/></button>
-          <button class="icon-btn" :title="inspectorOpen ? '收起动效设置' : '展开动效设置'" aria-label="切换动效设置" @click="inspectorOpen=!inspectorOpen"><Settings2 :size="20"/></button>
-          <button class="icon-btn help-btn" title="关于此项目" @click="showAbout = true"><Info :size="20"/></button>
-          <span class="top-avatar">W</span>
-        </div>
-      </header>
       <div class="workspace">
         <aside class="sidebar" :class="{ 'mobile-open': mobileChats }">
-          <div class="side-heading"><span>会话</span><span class="count">{{ chats.length }} 个会话</span></div>
-          <label class="search"><Search :size="19" /><input ref="searchInput" v-model="query" type="search" placeholder="搜索会话 · Ctrl K" aria-label="搜索会话" /><kbd>⌘K</kbd></label>
-          <div class="section-label">最近聊天</div>
+          <div class="side-heading">
+            <button class="icon-btn side-menu-button" aria-label="打开动效设置" title="动效设置" @click="inspectorOpen = true"><Menu :size="24"/></button>
+            <span class="side-title">Chats</span>
+            <span class="count">{{ chats.length }}</span>
+          </div>
+          <label class="search"><Search :size="19" /><input ref="searchInput" v-model="query" type="search" placeholder="Search" aria-label="搜索会话" /></label>
+
           <nav class="chat-list" aria-label="聊天会话">
             <button v-for="chat in filtered" :key="chat.id" class="chat-entry" :class="{ selected: chat.id === activeId }" @click="changeChat(chat.id)">
               <span class="avatar" :style="{ background: chat.color }">{{ chat.avatar }}</span>
@@ -340,11 +330,12 @@ const demos = [
           <div class="conversation-head">
             <button class="icon-btn mobile-back" aria-label="打开会话列表" @click="mobileChats = !mobileChats"><Menu :size="22"/></button>
             <span class="avatar header-avatar" :style="{ background: activeChat.color }">{{ activeChat.avatar }}</span>
-            <div class="head-info"><strong>{{ activeChat.name }}</strong><span>{{ activeChat.handle }}</span></div>
-            <span class="head-online" v-if="activeChat.online">● 在线</span>
+            <div class="head-info"><strong>{{ activeChat.name }}</strong><span>{{ activeChat.online ? 'online' : activeChat.handle }}</span></div>
+            
             <div class="head-spacer"></div>
             <button class="icon-btn" title="搜索会话" @click="mobileChats = true; nextTick(() => searchInput?.focus())"><Search :size="21"/></button>
-            <button class="icon-btn" title="聊天菜单" @click="lastMenu"><MoreVertical :size="21"/></button>
+            <button class="icon-btn" aria-label="打开动效设置" title="动效设置" @click="inspectorOpen = true"><Settings2 :size="21"/></button>
+            <button class="icon-btn" title="消息菜单" @click="lastMenu"><MoreVertical :size="21"/></button>
           </div>
           <div class="chat-wall">
             <Transition name="chat-swap">
@@ -370,18 +361,25 @@ const demos = [
             <Transition name="fade-up"><div v-if="showEmoji" class="emoji-picker"><button v-for="e in ['😀','💙','🔥','✨','🎉','👍','🤔','😍','🚀']" :key="e" @click="text += e; showEmoji = false; composer?.focus()">{{ e }}</button></div></Transition>
             <div class="composer">
               <button class="icon-btn attachment" title="选择表情" @click="showEmoji = !showEmoji"><Paperclip :size="22"/></button>
-              <textarea ref="composer" v-model="text" rows="1" placeholder="输入消息，体验丝滑的发送动画..." aria-label="消息内容" @keydown="onComposerKey"></textarea>
+              <textarea ref="composer" v-model="text" rows="1" placeholder="Message" aria-label="消息内容" @keydown="onComposerKey"></textarea>
               <button class="icon-btn emoji-toggle" title="表情" @click="showEmoji = !showEmoji"><Smile :size="22"/></button>
               <button class="send-btn" title="发送" :disabled="!text.trim()" @click="send()"><Send :size="20" fill="currentColor" :stroke-width="1.8"/></button>
             </div>
-            <span class="composer-note">Enter 发送 · Shift + Enter 换行 · 右键消息打开菜单</span>
+
           </div>
         </section>
 
-        <aside class="inspector">
-          <div class="inspector-heading"><span>动画实验室</span><span class="inspector-pill">INTERACTIVE</span></div>
-          <div class="inspector-intro">精细调节动效参数，感受不同缓动、时长与交互反馈。</div>
-          <div class="inspector-section"><span class="section-label">INTERACTION DEMOS</span>
+        <div v-if="inspectorOpen" class="inspector-scrim" @click="inspectorOpen = false"></div>
+        <aside v-if="inspectorOpen" class="inspector" aria-label="动效实验设置">
+          <div class="inspector-toolbar">
+            <button class="icon-btn" aria-label="关闭动效设置" title="关闭" @click="inspectorOpen = false"><X :size="22"/></button>
+            <strong>Settings</strong>
+            <button class="icon-btn" :title="theme === 'light' ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><Moon v-if="theme==='light'" :size="21"/><Sun v-else :size="21"/></button>
+            <button class="icon-btn" title="关于此项目" @click="showAbout = true"><Info :size="21"/></button>
+          </div>
+          <div class="inspector-heading"><span>Motion Lab</span></div>
+          
+          <div class="inspector-section"><span class="section-label">交互演示</span>
             <div class="demo-grid">
               <button v-for="d in demos" :key="d.key" class="demo-tile" :class="{ active:activeDemo === d.key }" @click="runDemo(d.key)"><span class="demo-icon"><component :is="d.icon" :size="21" :stroke-width="1.9"/></span><strong>{{ d.title }}</strong><small>{{ d.desc }}</small></button>
             </div>
@@ -411,10 +409,10 @@ const demos = [
             <label class="toggle-line"><span><b>减少动态效果</b><small>关闭非必要运动</small></span><input v-model="reduce" type="checkbox" role="switch"/><span class="toggle-track"></span></label>
             <label class="toggle-line"><span><b>低功耗模式</b><small>缩短动画、减少粒子</small></span><input v-model="lowPower" type="checkbox" role="switch"/><span class="toggle-track"></span></label>
           </div>
-          <div class="inspector-bottom"><div><span>●</span> {{ reduced ? '减少动态效果' : '动效引擎已启用' }}</div><small>WAAPI · CSS TRANSFORM · VUE 3</small></div>
+          
         </aside>
       </div>
-      <footer class="statusbar"><span><i class="status-light"></i> UI Motion Playground</span><span>基于 Telegram 交互理念独立制作</span><span>Vue 3 / TypeScript</span></footer>
+
     </div>
 
     <div v-if="menu" class="menu-overlay" @click="menu = null" @contextmenu.prevent="menu = null">
