@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { Menu, Search, Info, MoreVertical, Send, Smile, Paperclip, X, Reply, Copy, Heart, Settings2, Moon, Sun, CheckCheck, Zap, ArrowLeftRight, MessageCircle, MousePointerClick } from 'lucide-vue-next'
-import { flyText, motionPresets, systemReducedMotion, type MotionPreset } from './motion'
+import { cancelFlight, flyText, motionPresets, systemReducedMotion, type MotionPreset } from './motion'
 
 type Message = { id: number; text: string; time: string; mine: boolean; reaction?: string }
 type Chat = { id: number; name: string; handle: string; avatar: string; color: string; preview: string; time: string; online?: boolean }
@@ -42,6 +42,7 @@ const lowPower = ref(false)
 const osReduced = ref(false)
 const compact = ref(false)
 const theme = ref<'light' | 'dark'>('light')
+function toggleTheme() { theme.value = theme.value === 'light' ? 'dark' : 'light' }
 const inspectorOpen = ref(true)
 const mobileChats = ref(false)
 const showEmoji = ref(false)
@@ -53,13 +54,13 @@ const composer = ref<HTMLTextAreaElement | null>(null)
 const searchInput = ref<HTMLInputElement | null>(null)
 const scrollEl = ref<HTMLElement | null>(null)
 const stageRef = ref<HTMLElement | null>(null)
-const menu = ref<{ id: number; x: number; y: number } | null>(null)
+const menu = ref<{ id: number; x: number; y: number; originX: number; originY: number } | null>(null)
 const toast = ref('')
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let nextId = 100
 let media: MediaQueryList | undefined
 let touchTimer: ReturnType<typeof setTimeout> | undefined
-let swipe: { id: number; pointer: number; x: number; y: number; dx: number; el: HTMLElement } | null = null
+let swipe: { id: number; pointer: number; x: number; y: number; dx: number; el: HTMLElement; axis: 'pending'|'horizontal'|'vertical' } | null = null
 const easing = computed(() => motionPresets[preset.value].ease)
 const reduced = computed(() => reduce.value || osReduced.value)
 const ms = computed(() => reduced.value ? 0 : lowPower.value ? Math.round(duration.value * .6) : duration.value)
@@ -76,6 +77,8 @@ function scrollBottom() {
 }
 function changeChat(id: number) {
   if (id === activeId.value) return
+  cancelFlight()
+  pending.clear()
   activeId.value = id
   mobileChats.value = false
   menu.value = null
@@ -88,6 +91,8 @@ async function send(forced?: string) {
   const content = (forced ?? text.value).trim()
   if (!content) { composer.value?.focus(); return }
   const from = composer.value?.getBoundingClientRect()
+  cancelFlight()
+  pending.clear()
   const chatId = activeId.value
   const id = ++nextId
   if (!forced) text.value = ''
@@ -101,7 +106,8 @@ async function send(forced?: string) {
   const target = document.querySelector<HTMLElement>('.bubble[data-mid="' + id + '"]')
   try {
     if (from && target && ms.value && chatId === activeId.value) {
-      await flyText(content, from, target.getBoundingClientRect(), ms.value, easing.value)
+      const styles = getComputedStyle(target)
+      await flyText(content, from, target.getBoundingClientRect(), ms.value, easing.value, styles.backgroundColor, styles.color)
     }
   } finally {
     pending.delete(id)
@@ -115,8 +121,15 @@ function onComposerKey(e: KeyboardEvent) {
   }
 }
 function openMenuByRect(id: number, r: DOMRect) {
-  const w = 220, h = 204
-  menu.value = { id, x: Math.max(14, Math.min(window.innerWidth - w - 14, r.right - w + 18)), y: Math.max(14, Math.min(window.innerHeight - h - 14, r.top + 8)) }
+  // Keep the anchor point inside the viewport, including near its edges.
+  const width = 232, height = 210, inset = 12
+  const x = Math.max(inset, Math.min(window.innerWidth - width - inset, r.right - width + 12))
+  const y = Math.max(inset, Math.min(window.innerHeight - height - inset, r.top))
+  menu.value = {
+    id, x, y,
+    originX: Math.max(0, Math.min(width, r.right - x - 12)),
+    originY: Math.max(0, Math.min(height, r.top + Math.min(24, r.height / 2) - y))
+  }
   activeDemo.value = 'popover'
 }
 function openMenu(e: Event, m: Message) {
@@ -173,32 +186,48 @@ function lastReact() {
 function startSwipe(e: PointerEvent, m: Message) {
   if (e.button !== 0 || (e.target as HTMLElement).closest('button')) return
   const el = e.currentTarget as HTMLElement
-  swipe = { id:m.id, pointer:e.pointerId, x:e.clientX, y:e.clientY, dx:0, el }
+  swipe = { id:m.id, pointer:e.pointerId, x:e.clientX, y:e.clientY, dx:0, el, axis:'pending' }
   if (touchTimer) clearTimeout(touchTimer)
-  if (e.pointerType !== 'mouse') touchTimer = setTimeout(() => { if (swipe?.id === m.id && swipe.dx < 8) { openMenuByRect(m.id, el.getBoundingClientRect()); swipe = null } }, 570)
+  if (e.pointerType !== 'mouse') touchTimer = setTimeout(() => {
+    if (swipe?.id === m.id && swipe.axis === 'pending') {
+      openMenuByRect(m.id, el.getBoundingClientRect())
+      swipe = null
+    }
+  }, 520)
 }
 function moveSwipe(e: PointerEvent) {
   if (!swipe || swipe.pointer !== e.pointerId) return
-  const dx = e.clientX - swipe.x
-  const dy = e.clientY - swipe.y
-  if (Math.abs(dx) > 9 || Math.abs(dy) > 9) { if (touchTimer) clearTimeout(touchTimer) }
-  if (Math.abs(dx) > Math.abs(dy) && dx > 0) {
-    swipe.dx = Math.min(dx, 95)
-    swipe.el.style.transition = 'none'
-    swipe.el.style.transform = 'translate3d(' + swipe.dx + 'px,0,0)'
+  const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y
+  if (Math.hypot(dx,dy) > 9) {
+    if (touchTimer) clearTimeout(touchTimer)
+    if (swipe.axis === 'pending') swipe.axis = Math.abs(dx) > Math.abs(dy) * 1.25 ? 'horizontal' : 'vertical'
   }
+  if (swipe.axis !== 'horizontal' || dx <= 0) return
+  // Rubber-band resistance after the trigger distance.
+  const offset = dx < 62 ? dx : 62 + (dx - 62) * .22
+  swipe.dx = Math.min(98, offset)
+  swipe.el.getAnimations().forEach(a => a.cancel())
+  swipe.el.style.transform = `translate3d(${swipe.dx}px,0,0)`
+  swipe.el.style.transition = 'none'
 }
 function endSwipe(e: PointerEvent, m: Message) {
   if (touchTimer) clearTimeout(touchTimer)
   if (!swipe || swipe.id !== m.id || swipe.pointer !== e.pointerId) return
-  const s = swipe
+  const state = swipe
   swipe = null
-  s.el.style.transition = 'transform var(--duration) var(--ease)'
-  s.el.style.transform = ''
-  if (s.dx > 55) {
+  const distance = state.dx
+  state.el.style.transition = 'none'
+  state.el.style.transform = ''
+  if (distance && ms.value) {
+    state.el.animate([
+      {transform:`translate3d(${distance}px,0,0)`},
+      {transform:'translate3d(-3px,0,0)',offset:.78},
+      {transform:'translate3d(0,0,0)'}
+    ],{duration:Math.min(440,Math.max(180,ms.value)),easing:'cubic-bezier(.2,.8,.2,1)'})
+  }
+  if (e.type !== 'pointercancel' && distance > 54) {
     reply.value = m
     activeDemo.value = 'swipe'
-    notice('已选择回复消息')
     composer.value?.focus()
   }
 }
@@ -231,6 +260,7 @@ onBeforeUnmount(() => {
   media?.removeEventListener('change', onMediaChange)
   if (touchTimer) clearTimeout(touchTimer)
   if (toastTimer) clearTimeout(toastTimer)
+  cancelFlight()
 })
 const demos = [
   {key:'send',icon:Send,title:'消息飞入',desc:'输入框 → 气泡'},
@@ -254,7 +284,7 @@ const demos = [
         </div>
         <div class="topbar-right">
           <span class="topbar-status"><i class="status-light"></i> 本地交互演示</span>
-          <button class="icon-btn" :title="theme === 'light' ? '切换深色主题' : '切换浅色主题'" :aria-label="theme === 'light' ? '切换深色主题' : '切换浅色主题'" @click="theme=theme==='light'?'dark':'light'"><Moon v-if="theme === 'light'" :size="20"/><Sun v-else :size="20"/></button>
+          <button class="icon-btn" :title="theme === 'light' ? '切换深色主题' : '切换浅色主题'" :aria-label="theme === 'light' ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><Moon v-if="theme === 'light'" :size="20"/><Sun v-else :size="20"/></button>
           <button class="icon-btn" :title="inspectorOpen ? '收起动效设置' : '展开动效设置'" aria-label="切换动效设置" @click="inspectorOpen=!inspectorOpen"><Settings2 :size="20"/></button>
           <button class="icon-btn help-btn" title="关于此项目" @click="showAbout = true"><Info :size="20"/></button>
           <span class="top-avatar">W</span>
@@ -348,7 +378,7 @@ const demos = [
     </div>
 
     <div v-if="menu" class="menu-overlay" @click="menu = null" @contextmenu.prevent="menu = null">
-      <div class="context-menu" :style="{ left:menu.x+'px', top:menu.y+'px' }" role="menu" @click.stop>
+      <div class="context-menu" :style="{ left:menu.x+'px', top:menu.y+'px', '--menu-origin': menu.originX+'px '+menu.originY+'px' }" role="menu" @click.stop>
         <div class="quick-reactions"><button v-for="e in ['👍','❤️','😂','🔥','✨','💙']" :key="e" :title="'回应 '+e" @click="doMenu('react',e)">{{ e }}</button></div>
         <div class="menu-separator"></div>
         <button @click="doMenu('reply')"><Reply :size="19"/> 回复消息</button>
