@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { Menu, Search, Info, MoreVertical, ArrowLeft, Send, Smile, Paperclip, X, Reply, Copy, Heart, Settings2, Moon, Sun, CheckCheck, Zap, ArrowLeftRight, MessageCircle, MousePointerClick, MoveRight, Sparkles, ChevronDown } from 'lucide-vue-next'
+import { Menu, Search, Info, MoreVertical, Send, Smile, Paperclip, X, Reply, Copy, Heart, Settings2, Moon, Sun, CheckCheck, Zap, ArrowLeftRight, MessageCircle, MousePointerClick } from 'lucide-vue-next'
 import { flyText, motionPresets, systemReducedMotion, type MotionPreset } from './motion'
 
 type Message = { id: number; text: string; time: string; mine: boolean; reaction?: string }
