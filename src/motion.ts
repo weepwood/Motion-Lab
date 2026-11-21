@@ -27,29 +27,55 @@ export function playInterruptible(element: HTMLElement, frames: Keyframe[], dura
   return animation
 }
 
+let currentFlight: Animation | null = null
+let currentGhost: HTMLElement | null = null
+
+export function cancelFlight() {
+  currentFlight?.cancel()
+  currentFlight = null
+  currentGhost?.remove()
+  currentGhost = null
+}
+
+/**
+ * FLIP send flight: the ghost is drawn at the final bubble coordinates,
+ * and transformed from the composer origin. Avoid animating layout properties.
+ * A new send or chat switch cancels the previous flight without hiding a bubble.
+ */
 export async function flyText(
-  text: string, from: DOMRect, to: DOMRect, duration: number, ease: string
+  text: string, from: DOMRect, to: DOMRect, duration: number, ease: string,
+  outgoingColor?: string, outgoingText?: string
 ): Promise<void> {
-  if (duration <= 0) return
+  cancelFlight()
+  if (duration <= 0 || to.width <= 0 || to.height <= 0) return
   const ghost = document.createElement('div')
   ghost.className = 'flight-ghost'
   ghost.textContent = text
-  ghost.style.left = from.left + 'px'
-  ghost.style.top = from.top + 'px'
-  ghost.style.width = Math.max(110, to.width) + 'px'
+  ghost.style.left = to.left + 'px'
+  ghost.style.top = to.top + 'px'
+  ghost.style.width = to.width + 'px'
+  ghost.style.maxWidth = to.width + 'px'
+  ghost.style.minHeight = to.height + 'px'
+  if (outgoingColor) ghost.style.background = outgoingColor
+  if (outgoingText) ghost.style.color = outgoingText
   document.body.append(ghost)
-  const dx = to.left - from.left
-  const dy = to.top - from.top
-  const scale = Math.min(.92, Math.max(.63, from.width / Math.max(to.width, 1)))
+  currentGhost = ghost
+  const dx = from.left + Math.min(from.width * .25, 60) - to.left
+  const dy = from.top + from.height / 2 - to.top - to.height / 2
+  const scale = Math.max(.83, Math.min(1, from.width / Math.max(to.width, 1)))
+  const animation = ghost.animate([
+    { transform: `translate3d(${dx}px,${dy}px,0) scale(${scale})`, opacity: .35, offset: 0 },
+    { transform: `translate3d(${dx * .38}px,${dy * .25}px,0) scale(.98)`, opacity: .95, offset: .68 },
+    { transform: 'translate3d(0,0,0) scale(1)', opacity: 1, offset: 1 }
+  ], { duration, easing: ease, fill: 'forwards' })
+  currentFlight = animation
   try {
-    const a = ghost.animate([
-      { transform: 'translate3d(0,0,0) scale('+scale+')', opacity: .35 },
-      { transform: 'translate3d('+dx+'px,'+dy+'px,0) scale(1)', opacity: 1 }
-    ], { duration, easing: ease, fill: 'forwards' })
-    await a.finished
+    await animation.finished
   } catch {
-    // Cancelled when switching screens; cleanup is unconditional.
+    // Intentional cancellation on navigation or rapid consecutive sends.
   } finally {
+    if (currentFlight === animation) currentFlight = null
+    if (currentGhost === ghost) currentGhost = null
     ghost.remove()
   }
 }
