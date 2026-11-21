@@ -9,6 +9,13 @@
 
 > 仅研究与演示动效，不隶属于 Telegram，也不包含官方客户端代码。
 
+## Telegram Web 风格与图标
+
+- 参考 [morethanwords/tweb](https://github.com/morethanwords/tweb) 的聊天界面层级、圆形头像、消息气泡与左右分栏。**不是 Telegram 的完整客户端，也不接入 Telegram API。**
+- 使用 [Lucide](https://lucide.dev/) 的 `lucide-vue-next` 统一主要操作图标。
+- 默认浅色主题；顶部月亮 / 太阳按钮可切换深浅色。动效设置面板可收起。
+- 动效仍是本项目的独立实现；未复制 tweb 的源代码、图片、字体或品牌素材。若将来直接移植 tweb 的代码，应遵守其 GPL-3.0 许可证。
+
 ## 本地运行
 
 Node.js 20.19+ 或 22.12+：
@@ -51,3 +58,21 @@ npm run preview
 ## 开源许可
 
 MIT License。
+## 动效稳定性与性能验证
+
+本仓库在 CI 上执行 Vue 类型检查、Vite 构建与 Chromium Playwright 浏览器测试：
+
+```bash
+npm install
+npx playwright install chromium
+npm run build
+npm run test:e2e
+```
+
+覆盖发送动画清理、菜单边缘定位、主题持久化、频繁切换会话、连续发送、减少动态效果及 500 条消息长列表场景。
+
+- 会话列表采用最近消息窗口：初始只渲染末尾 120 条；点“查看更早的消息”按 120 条逐批加载。
+- “压力测试”一次添加 500 条模拟消息，测试响应速度与 DOM 数量，**不代表大型真实 Telegram 消息库的性能基准**。
+- 页面包含实验性动画，尚需在真实触控设备、低端 GPU 以及多浏览器上进行视觉和性能回归。
+- 发送动画以目标气泡的 `DOMRect` 为终点；新消息或会话切换可打断上一段飞行动画。
+- 菜单锚点随气泡位置计算，并约束在可视视口内；滑动回复通过方向锁避免与垂直滚动竞争。

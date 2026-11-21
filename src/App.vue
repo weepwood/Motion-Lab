@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { flyText, motionPresets, systemReducedMotion, type MotionPreset } from './motion'
+import { Menu, Search, Info, MoreVertical, Send, Smile, Paperclip, X, Reply, Copy, Heart, Settings2, Moon, Sun, CheckCheck, Zap, ArrowLeftRight, MessageCircle, MousePointerClick } from 'lucide-vue-next'
+import { cancelFlight, flyText, motionPresets, systemReducedMotion, type MotionPreset } from './motion'
 
 type Message = { id: number; text: string; time: string; mine: boolean; reaction?: string }
 type Chat = { id: number; name: string; handle: string; avatar: string; color: string; preview: string; time: string; online?: boolean }
@@ -31,6 +32,17 @@ const data = reactive<Record<number, Message[]>>({
 const activeId = ref(1)
 const activeChat = computed(() => chats.find(c => c.id === activeId.value) ?? chats[0]!)
 const messages = computed(() => data[activeId.value] ?? [])
+const visibleCount = ref(120)
+const visibleMessages = computed(() => messages.value.slice(-visibleCount.value))
+const hiddenMessageCount = computed(() => Math.max(0, messages.value.length - visibleCount.value))
+async function loadOlderMessages() {
+  const el = scrollEl.value
+  const oldHeight = el?.scrollHeight ?? 0
+  const oldTop = el?.scrollTop ?? 0
+  visibleCount.value += 120
+  await nextTick()
+  if (el) el.scrollTop = oldTop + el.scrollHeight - oldHeight
+}
 const query = ref('')
 const filtered = computed(() => chats.filter(c => (c.name + c.handle + c.preview).toLowerCase().includes(query.value.toLowerCase())))
 const text = ref('')
@@ -40,6 +52,13 @@ const reduce = ref(false)
 const lowPower = ref(false)
 const osReduced = ref(false)
 const compact = ref(false)
+const theme = ref<'light' | 'dark'>('light')
+function setTheme(value: 'light' | 'dark') {
+  theme.value = value
+  try { localStorage.setItem('motion-lab-theme', value) } catch { /* Storage may be disabled */ }
+}
+function toggleTheme() { setTheme(theme.value === 'light' ? 'dark' : 'light') }
+const inspectorOpen = ref(true)
 const mobileChats = ref(false)
 const showEmoji = ref(false)
 const showAbout = ref(false)
@@ -50,13 +69,13 @@ const composer = ref<HTMLTextAreaElement | null>(null)
 const searchInput = ref<HTMLInputElement | null>(null)
 const scrollEl = ref<HTMLElement | null>(null)
 const stageRef = ref<HTMLElement | null>(null)
-const menu = ref<{ id: number; x: number; y: number } | null>(null)
+const menu = ref<{ id: number; x: number; y: number; originX: number; originY: number } | null>(null)
 const toast = ref('')
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let nextId = 100
 let media: MediaQueryList | undefined
 let touchTimer: ReturnType<typeof setTimeout> | undefined
-let swipe: { id: number; pointer: number; x: number; y: number; dx: number; el: HTMLElement } | null = null
+let swipe: { id: number; pointer: number; x: number; y: number; dx: number; el: HTMLElement; axis: 'pending'|'horizontal'|'vertical' } | null = null
 const easing = computed(() => motionPresets[preset.value].ease)
 const reduced = computed(() => reduce.value || osReduced.value)
 const ms = computed(() => reduced.value ? 0 : lowPower.value ? Math.round(duration.value * .6) : duration.value)
@@ -73,7 +92,10 @@ function scrollBottom() {
 }
 function changeChat(id: number) {
   if (id === activeId.value) return
+  cancelFlight()
+  pending.clear()
   activeId.value = id
+  visibleCount.value = 120
   mobileChats.value = false
   menu.value = null
   showEmoji.value = false
@@ -85,6 +107,8 @@ async function send(forced?: string) {
   const content = (forced ?? text.value).trim()
   if (!content) { composer.value?.focus(); return }
   const from = composer.value?.getBoundingClientRect()
+  cancelFlight()
+  pending.clear()
   const chatId = activeId.value
   const id = ++nextId
   if (!forced) text.value = ''
@@ -98,7 +122,8 @@ async function send(forced?: string) {
   const target = document.querySelector<HTMLElement>('.bubble[data-mid="' + id + '"]')
   try {
     if (from && target && ms.value && chatId === activeId.value) {
-      await flyText(content, from, target.getBoundingClientRect(), ms.value, easing.value)
+      const styles = getComputedStyle(target)
+      await flyText(content, from, target.getBoundingClientRect(), ms.value, easing.value, styles.backgroundColor, styles.color)
     }
   } finally {
     pending.delete(id)
@@ -112,8 +137,15 @@ function onComposerKey(e: KeyboardEvent) {
   }
 }
 function openMenuByRect(id: number, r: DOMRect) {
-  const w = 220, h = 204
-  menu.value = { id, x: Math.max(14, Math.min(window.innerWidth - w - 14, r.right - w + 18)), y: Math.max(14, Math.min(window.innerHeight - h - 14, r.top + 8)) }
+  // Keep the anchor point inside the viewport, including near its edges.
+  const width = 232, height = 210, inset = 12
+  const x = Math.max(inset, Math.min(window.innerWidth - width - inset, r.right - width + 12))
+  const y = Math.max(inset, Math.min(window.innerHeight - height - inset, r.top))
+  menu.value = {
+    id, x, y,
+    originX: Math.max(0, Math.min(width, r.right - x - 12)),
+    originY: Math.max(0, Math.min(height, r.top + Math.min(24, r.height / 2) - y))
+  }
   activeDemo.value = 'popover'
 }
 function openMenu(e: Event, m: Message) {
@@ -170,32 +202,48 @@ function lastReact() {
 function startSwipe(e: PointerEvent, m: Message) {
   if (e.button !== 0 || (e.target as HTMLElement).closest('button')) return
   const el = e.currentTarget as HTMLElement
-  swipe = { id:m.id, pointer:e.pointerId, x:e.clientX, y:e.clientY, dx:0, el }
+  swipe = { id:m.id, pointer:e.pointerId, x:e.clientX, y:e.clientY, dx:0, el, axis:'pending' }
   if (touchTimer) clearTimeout(touchTimer)
-  if (e.pointerType !== 'mouse') touchTimer = setTimeout(() => { if (swipe?.id === m.id && swipe.dx < 8) { openMenuByRect(m.id, el.getBoundingClientRect()); swipe = null } }, 570)
+  if (e.pointerType !== 'mouse') touchTimer = setTimeout(() => {
+    if (swipe?.id === m.id && swipe.axis === 'pending') {
+      openMenuByRect(m.id, el.getBoundingClientRect())
+      swipe = null
+    }
+  }, 520)
 }
 function moveSwipe(e: PointerEvent) {
   if (!swipe || swipe.pointer !== e.pointerId) return
-  const dx = e.clientX - swipe.x
-  const dy = e.clientY - swipe.y
-  if (Math.abs(dx) > 9 || Math.abs(dy) > 9) { if (touchTimer) clearTimeout(touchTimer) }
-  if (Math.abs(dx) > Math.abs(dy) && dx > 0) {
-    swipe.dx = Math.min(dx, 95)
-    swipe.el.style.transition = 'none'
-    swipe.el.style.transform = 'translate3d(' + swipe.dx + 'px,0,0)'
+  const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y
+  if (Math.hypot(dx,dy) > 9) {
+    if (touchTimer) clearTimeout(touchTimer)
+    if (swipe.axis === 'pending') swipe.axis = Math.abs(dx) > Math.abs(dy) * 1.25 ? 'horizontal' : 'vertical'
   }
+  if (swipe.axis !== 'horizontal' || dx <= 0) return
+  // Rubber-band resistance after the trigger distance.
+  const offset = dx < 62 ? dx : 62 + (dx - 62) * .22
+  swipe.dx = Math.min(98, offset)
+  swipe.el.getAnimations().forEach(a => a.cancel())
+  swipe.el.style.transform = `translate3d(${swipe.dx}px,0,0)`
+  swipe.el.style.transition = 'none'
 }
 function endSwipe(e: PointerEvent, m: Message) {
   if (touchTimer) clearTimeout(touchTimer)
   if (!swipe || swipe.id !== m.id || swipe.pointer !== e.pointerId) return
-  const s = swipe
+  const state = swipe
   swipe = null
-  s.el.style.transition = 'transform var(--duration) var(--ease)'
-  s.el.style.transform = ''
-  if (s.dx > 55) {
+  const distance = state.dx
+  state.el.style.transition = 'none'
+  state.el.style.transform = ''
+  if (distance && ms.value) {
+    state.el.animate([
+      {transform:`translate3d(${distance}px,0,0)`},
+      {transform:'translate3d(-3px,0,0)',offset:.78},
+      {transform:'translate3d(0,0,0)'}
+    ],{duration:Math.min(440,Math.max(180,ms.value)),easing:'cubic-bezier(.2,.8,.2,1)'})
+  }
+  if (e.type !== 'pointercancel' && distance > 54) {
     reply.value = m
     activeDemo.value = 'swipe'
-    notice('已选择回复消息')
     composer.value?.focus()
   }
 }
@@ -209,6 +257,7 @@ function runDemo(key: string) {
     const m = messages.value[messages.value.length - 1]
     if (m) { reply.value = m; composer.value?.focus(); notice('也可以右滑任意消息回复') }
   }
+  else if (key === 'stress') runStressDemo()
   else if (key === 'micro') { notice('这是一个轻量微交互反馈 ✨'); compact.value = !compact.value }
 }
 function onKey(e: KeyboardEvent) {
@@ -217,6 +266,10 @@ function onKey(e: KeyboardEvent) {
 }
 const onMediaChange = (e: MediaQueryListEvent) => { osReduced.value = e.matches }
 onMounted(() => {
+  try {
+    const saved = localStorage.getItem('motion-lab-theme')
+    if (saved === 'light' || saved === 'dark') theme.value = saved
+  } catch { /* Storage may be disabled */ }
   media = matchMedia('(prefers-reduced-motion: reduce)')
   osReduced.value = systemReducedMotion()
   media.addEventListener('change', onMediaChange)
@@ -228,83 +281,98 @@ onBeforeUnmount(() => {
   media?.removeEventListener('change', onMediaChange)
   if (touchTimer) clearTimeout(touchTimer)
   if (toastTimer) clearTimeout(toastTimer)
+  cancelFlight()
 })
+function runStressDemo() {
+  // DOM stays bounded by visibleMessages while the store exercises heavy histories.
+  const chat = data[activeId.value]
+  if (!chat) return
+  for (let index = 0; index < 500; index++) {
+    chat.push({ id: ++nextId, text: `性能测试消息 ${index + 1} · Telegram 风格长消息列表滚动与切换。`, time: now(), mine: index % 3 === 0 })
+  }
+  void nextTick(scrollBottom)
+  notice('已生成 500 条消息 · 页面仅渲染最近 120 条')
+}
 const demos = [
-  {key:'send',icon:'↗',title:'消息飞入',desc:'输入框 → 气泡'},
-  {key:'page',icon:'⇄',title:'页面转场',desc:'连续切换'},
-  {key:'popover',icon:'▣',title:'弹出菜单',desc:'锚点缩放'},
-  {key:'reaction',icon:'♡',title:'表情反馈',desc:'弹性微交互'},
-  {key:'swipe',icon:'⇢',title:'手势回复',desc:'跟手与回弹'},
-  {key:'micro',icon:'✳',title:'微交互',desc:'即时状态反馈'}
+  {key:'send',icon:Send,title:'消息飞入',desc:'输入框 → 气泡'},
+  {key:'page',icon:ArrowLeftRight,title:'页面转场',desc:'连续切换'},
+  {key:'popover',icon:MousePointerClick,title:'弹出菜单',desc:'锚点缩放'},
+  {key:'reaction',icon:Heart,title:'表情反馈',desc:'弹性微交互'},
+  {key:'swipe',icon:Reply,title:'手势回复',desc:'跟手与回弹'},
+  {key:'micro',icon:Zap,title:'微交互',desc:'即时状态反馈'},
+  {key:'stress',icon:Zap,title:'压力测试',desc:'追加 500 条消息'}
 ]
 </script>
 
 <template>
-  <div ref="stageRef" class="app-shell" :class="{ compact, 'reduce-animations': reduced }" :style="vars">
+  <div ref="stageRef" class="app-shell" :class="{ compact, 'reduce-animations': reduced, 'theme-light':theme === 'light', 'theme-dark':theme === 'dark', 'inspector-hidden':!inspectorOpen }" :style="vars">
     <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
     <div class="app-frame">
       <header class="topbar">
         <div class="topbar-left">
-          <span class="brand-symbol">✳</span>
-          <div class="brand-title"><strong>Motion Lab</strong><span class="brand-caption">TELEGRAM INSPIRED INTERACTIONS</span></div>
+          <span class="brand-symbol"><MessageCircle :size="21" :stroke-width="2.4" /></span>
+          <div class="brand-title"><strong>Motion Lab</strong><span class="brand-caption">Telegram-inspired motion playground</span></div>
           <span class="version">v1.0</span>
         </div>
         <div class="topbar-right">
-          <span class="topbar-status"><i class="status-light"></i> 运行中 · LIVE PREVIEW</span>
-          <button class="icon-btn help-btn" title="关于此项目" @click="showAbout = true">ⓘ</button>
+          <span class="topbar-status"><i class="status-light"></i> 本地交互演示</span>
+          <button class="icon-btn" :title="theme === 'light' ? '切换深色主题' : '切换浅色主题'" :aria-label="theme === 'light' ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><Moon v-if="theme === 'light'" :size="20"/><Sun v-else :size="20"/></button>
+          <button class="icon-btn" :title="inspectorOpen ? '收起动效设置' : '展开动效设置'" aria-label="切换动效设置" @click="inspectorOpen=!inspectorOpen"><Settings2 :size="20"/></button>
+          <button class="icon-btn help-btn" title="关于此项目" @click="showAbout = true"><Info :size="20"/></button>
           <span class="top-avatar">W</span>
         </div>
       </header>
       <div class="workspace">
         <aside class="sidebar" :class="{ 'mobile-open': mobileChats }">
-          <div class="side-heading"><span>会话</span><span class="count">{{ chats.length }} CHATS</span></div>
-          <label class="search"><span>⌕</span><input ref="searchInput" v-model="query" type="search" placeholder="搜索会话 · Ctrl K" aria-label="搜索会话" /><kbd>⌘K</kbd></label>
-          <div class="section-label">RECENT CONVERSATIONS</div>
+          <div class="side-heading"><span>会话</span><span class="count">{{ chats.length }} 个会话</span></div>
+          <label class="search"><Search :size="19" /><input ref="searchInput" v-model="query" type="search" placeholder="搜索会话 · Ctrl K" aria-label="搜索会话" /><kbd>⌘K</kbd></label>
+          <div class="section-label">最近聊天</div>
           <nav class="chat-list" aria-label="聊天会话">
             <button v-for="chat in filtered" :key="chat.id" class="chat-entry" :class="{ selected: chat.id === activeId }" @click="changeChat(chat.id)">
               <span class="avatar" :style="{ background: chat.color }">{{ chat.avatar }}</span>
               <span class="chat-info"><span class="chat-line"><b>{{ chat.name }}</b><small>{{ chat.time }}</small></span><span class="chat-preview">{{ chat.preview }}</span></span>
             </button>
           </nav>
-          <div class="side-footer"><span class="side-footer-icon">✦</span><span>Micro-interactions make the difference.</span></div>
+          
         </aside>
 
         <section class="conversation" aria-label="聊天动效演示">
           <div class="conversation-head">
-            <button class="icon-btn mobile-back" aria-label="打开会话列表" @click="mobileChats = !mobileChats">☰</button>
+            <button class="icon-btn mobile-back" aria-label="打开会话列表" @click="mobileChats = !mobileChats"><Menu :size="22"/></button>
             <span class="avatar header-avatar" :style="{ background: activeChat.color }">{{ activeChat.avatar }}</span>
             <div class="head-info"><strong>{{ activeChat.name }}</strong><span>{{ activeChat.handle }}</span></div>
             <span class="head-online" v-if="activeChat.online">● 在线</span>
             <div class="head-spacer"></div>
-            <button class="icon-btn" title="搜索" @click="notice('搜索演示：左侧可检索会话')">⌕</button>
-            <button class="icon-btn" title="聊天菜单" @click="lastMenu">⋮</button>
+            <button class="icon-btn" title="搜索会话" @click="mobileChats = true; nextTick(() => searchInput?.focus())"><Search :size="21"/></button>
+            <button class="icon-btn" title="聊天菜单" @click="lastMenu"><MoreVertical :size="21"/></button>
           </div>
           <div class="chat-wall">
-            <Transition name="chat-swap" mode="out-in">
+            <Transition name="chat-swap">
               <div :key="activeId" ref="scrollEl" class="message-scroll">
+                <button v-if="hiddenMessageCount" class="load-older" @click="loadOlderMessages">查看更早的 {{ hiddenMessageCount }} 条消息</button>
                 <div class="day-label"><span>今天</span></div>
-                <div v-for="m in messages" :key="m.id" class="message-row" :class="{ mine:m.mine, incoming:!m.mine }">
+                <div v-for="m in visibleMessages" :key="m.id" class="message-row" :class="{ mine:m.mine, incoming:!m.mine }">
                   <div v-if="!m.mine" class="mini-avatar" :style="{ background: activeChat.color }">{{ activeChat.avatar }}</div>
                   <div class="bubble" :class="{ 'is-pending': pending.has(m.id) }" :data-mid="m.id" @contextmenu="openMenu($event, m)" @pointerdown="startSwipe($event as PointerEvent, m)" @pointermove="moveSwipe($event as PointerEvent)" @pointerup="endSwipe($event as PointerEvent, m)" @pointercancel="endSwipe($event as PointerEvent, m)">
                     <span class="bubble-text">{{ m.text }}</span>
-                    <span class="bubble-bottom"><span>{{ m.time }}</span><span v-if="m.mine" class="read-icon">✓✓</span></span>
+                    <span class="bubble-bottom"><span>{{ m.time }}</span><CheckCheck v-if="m.mine" class="read-icon" :size="15"/></span>
                     <button v-if="m.reaction" class="reaction-chip" :aria-label="'反应 '+m.reaction" @click="addReaction(m, m.reaction)">{{ m.reaction }}</button>
                   </div>
-                  <button class="message-more" title="更多选项" @click="openMenu($event, m)">⋮</button>
+                  <button class="message-more" title="更多选项" @click="openMenu($event, m)"><MoreVertical :size="18"/></button>
                 </div>
               </div>
             </Transition>
           </div>
           <div class="composer-zone">
             <Transition name="fade-up">
-              <div v-if="reply" class="reply-preview"><span class="reply-mark"></span><div><b>回复消息</b><span>{{ reply.text }}</span></div><button class="icon-btn" @click="reply = null">×</button></div>
+              <div v-if="reply" class="reply-preview"><span class="reply-mark"></span><div><b>回复消息</b><span>{{ reply.text }}</span></div><button class="icon-btn" @click="reply = null" aria-label="取消回复"><X :size="18"/></button></div>
             </Transition>
             <Transition name="fade-up"><div v-if="showEmoji" class="emoji-picker"><button v-for="e in ['😀','💙','🔥','✨','🎉','👍','🤔','😍','🚀']" :key="e" @click="text += e; showEmoji = false; composer?.focus()">{{ e }}</button></div></Transition>
             <div class="composer">
-              <button class="icon-btn attachment" title="插入演示表情" @click="showEmoji = !showEmoji">＋</button>
+              <button class="icon-btn attachment" title="选择表情" @click="showEmoji = !showEmoji"><Paperclip :size="22"/></button>
               <textarea ref="composer" v-model="text" rows="1" placeholder="输入消息，体验丝滑的发送动画..." aria-label="消息内容" @keydown="onComposerKey"></textarea>
-              <button class="icon-btn emoji-toggle" title="表情" @click="showEmoji = !showEmoji">☺</button>
-              <button class="send-btn" title="发送" :disabled="!text.trim()" @click="send()">➤</button>
+              <button class="icon-btn emoji-toggle" title="表情" @click="showEmoji = !showEmoji"><Smile :size="22"/></button>
+              <button class="send-btn" title="发送" :disabled="!text.trim()" @click="send()"><Send :size="20" fill="currentColor" :stroke-width="1.8"/></button>
             </div>
             <span class="composer-note">Enter 发送 · Shift + Enter 换行 · 右键消息打开菜单</span>
           </div>
@@ -315,11 +383,18 @@ const demos = [
           <div class="inspector-intro">精细调节动效参数，感受不同缓动、时长与交互反馈。</div>
           <div class="inspector-section"><span class="section-label">INTERACTION DEMOS</span>
             <div class="demo-grid">
-              <button v-for="d in demos" :key="d.key" class="demo-tile" :class="{ active:activeDemo === d.key }" @click="runDemo(d.key)"><span class="demo-icon">{{ d.icon }}</span><strong>{{ d.title }}</strong><small>{{ d.desc }}</small></button>
+              <button v-for="d in demos" :key="d.key" class="demo-tile" :class="{ active:activeDemo === d.key }" @click="runDemo(d.key)"><span class="demo-icon"><component :is="d.icon" :size="21" :stroke-width="1.9"/></span><strong>{{ d.title }}</strong><small>{{ d.desc }}</small></button>
             </div>
           </div>
           <div class="inspector-section settings-section">
-            <div class="section-title"><span>动效参数</span><span class="section-gear">⚙</span></div>
+            <div class="theme-setting">
+              <span class="field-label">外观主题</span>
+              <div class="theme-options" role="group" aria-label="外观主题">
+                <button :aria-pressed="theme === 'light'" :class="{ chosen:theme==='light' }" @click="setTheme('light')"><Sun :size="17"/> 浅色</button>
+                <button :aria-pressed="theme === 'dark'" :class="{ chosen:theme==='dark' }" @click="setTheme('dark')"><Moon :size="17"/> 深色</button>
+              </div>
+            </div>
+            <div class="section-title"><span>动效参数</span><span class="section-gear"><Settings2 :size="19"/></span></div>
             <label class="field-label">缓动曲线 <span>{{ motionPresets[preset].label }}</span></label>
             <div class="preset-options"><button v-for="(option,key) in motionPresets" :key="key" :class="{ chosen:preset === key }" @click="preset = key">{{ option.label }}</button></div>
             <div class="curve-box">
@@ -343,15 +418,15 @@ const demos = [
     </div>
 
     <div v-if="menu" class="menu-overlay" @click="menu = null" @contextmenu.prevent="menu = null">
-      <div class="context-menu" :style="{ left:menu.x+'px', top:menu.y+'px' }" role="menu" @click.stop>
+      <div class="context-menu" :style="{ left:menu.x+'px', top:menu.y+'px', '--menu-origin': menu.originX+'px '+menu.originY+'px' }" role="menu" @click.stop>
         <div class="quick-reactions"><button v-for="e in ['👍','❤️','😂','🔥','✨','💙']" :key="e" :title="'回应 '+e" @click="doMenu('react',e)">{{ e }}</button></div>
         <div class="menu-separator"></div>
-        <button @click="doMenu('reply')"><span>↩</span> 回复消息</button>
-        <button @click="doMenu('copy')"><span>▣</span> 复制文本</button>
-        <button @click="doMenu('react','💙')"><span>♡</span> 快速点赞</button>
+        <button @click="doMenu('reply')"><Reply :size="19"/> 回复消息</button>
+        <button @click="doMenu('copy')"><Copy :size="19"/> 复制文本</button>
+        <button @click="doMenu('react','💙')"><Heart :size="19"/> 快速点赞</button>
       </div>
     </div>
-    <div v-if="showAbout" class="modal-overlay" @click="showAbout=false"><div class="about-modal" @click.stop><button class="modal-close" @click="showAbout=false">×</button><span class="brand-symbol">✳</span><h2>Telegram Motion Lab</h2><p>独立制作的动效实验室，展示真实的发送、切换、菜单、表情与手势交互。此项目不属于 Telegram 官方。</p><div class="about-badges"><span>Vue 3</span><span>TypeScript</span><span>WAAPI</span><span>Vite 7</span></div><button class="about-done" @click="showAbout=false">继续体验</button></div></div>
+    <div v-if="showAbout" class="modal-overlay" @click="showAbout=false"><div class="about-modal" @click.stop><button class="modal-close" @click="showAbout=false" aria-label="关闭"><X :size="22"/></button><span class="brand-symbol"><MessageCircle :size="21"/></span><h2>Telegram Motion Lab</h2><p>独立制作的动效实验室，展示真实的发送、切换、菜单、表情与手势交互。此项目不属于 Telegram 官方。</p><div class="about-badges"><span>Vue 3</span><span>TypeScript</span><span>WAAPI</span><span>Vite 7</span></div><button class="about-done" @click="showAbout=false">继续体验</button></div></div>
     <Transition name="toast"><div v-if="toast" class="toast-msg">{{ toast }}</div></Transition>
   </div>
 </template>

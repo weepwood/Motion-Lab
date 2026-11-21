@@ -1,4 +1,4 @@
-name: Build and typecheck
+name: Build, typecheck and browser tests
 on:
   push:
     branches: [main]
@@ -16,6 +16,19 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Typecheck and build
         run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser interaction and stress tests
+        run: npm run test:e2e
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
       - name: Upload production bundle
         uses: actions/upload-artifact@v4
         with:
