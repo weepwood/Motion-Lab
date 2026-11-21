@@ -141,3 +141,73 @@
 body:has(.theme-dark) .flight-ghost{background:#2b5278;color:#f5f5f5}
 @media(max-width:990px){.inspector-hidden .workspace{grid-template-columns:300px minmax(0,1fr)}}
 @media(max-width:710px){.inspector-hidden .workspace{display:block}}
+
+/* Motion refinements derived from publicly documented tweb layout variables.
+   Use small composited transitions; no upstream CSS or artwork is copied. */
+:root{--tg-menu-duration:160ms;--tg-topbar-height:56px}
+.chat-swap-enter-active,.chat-swap-leave-active{
+ transition:transform var(--fast) cubic-bezier(.2,.8,.2,1),opacity var(--fast) ease!important;
+ will-change:transform,opacity;
+}
+.chat-swap-enter-from{transform:translate3d(14px,0,0)!important;opacity:0}
+.chat-swap-leave-to{transform:translate3d(-12px,0,0)!important;opacity:0}
+.chat-swap-leave-active{pointer-events:none}
+.message-scroll{gap:8px;contain:layout style;overscroll-behavior:contain}
+.bubble{box-shadow:0 1px 2px var(--tg-shadow);font-size:16px;min-width:75px;touch-action:pan-y}
+.bubble-text{font-size:15px;line-height:1.37}
+.message-row{min-height:25px}
+.message-row+.message-row{margin-top:1px}
+.day-label{margin:8px 0 10px}
+.context-menu{
+ width:232px;transform-origin:var(--menu-origin, 80% 15%);
+ animation:tg-context-in var(--tg-menu-duration) cubic-bezier(.2,.8,.2,1) both;
+ padding:6px;border:1px solid var(--tg-border);
+}
+@keyframes tg-context-in{
+ from{opacity:0;transform:translate3d(0,5px,0) scale(.88)}
+ to{opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+.context-menu>button{min-height:42px;border-radius:8px;gap:12px;padding:10px 12px}
+.quick-reactions{gap:2px;padding:8px 4px}
+.quick-reactions button{min-width:30px;min-height:31px;border-radius:50%}
+.quick-reactions button:focus-visible{outline:2px solid var(--tg-accent)}
+.modal-overlay{background:rgba(0,0,0,.43);backdrop-filter:blur(4px)}
+.about-modal{
+ background:var(--tg-surface);border:1px solid var(--tg-border);
+ box-shadow:0 20px 65px var(--tg-shadow);border-radius:18px;
+ animation:modal-enter 180ms cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes modal-enter{from{opacity:0;transform:translateY(9px) scale(.96)}to{opacity:1;transform:none}}
+.about-modal .brand-symbol{background:var(--tg-accent);color:#fff}
+.about-modal .modal-close{display:grid;place-items:center;color:var(--tg-muted)}
+.about-done{background:var(--tg-accent);color:#fff;border-radius:11px;font-size:13px}
+.theme-options{display:flex;gap:8px;margin:1px 0 22px}
+.theme-options button{
+ flex:1;display:flex;justify-content:center;align-items:center;gap:8px;
+ height:42px;border-radius:11px;border:1px solid var(--tg-border);
+ background:var(--tg-secondary);color:var(--tg-text);font-size:12px;
+ transition:background 150ms ease,border-color 150ms ease;
+}
+.theme-options button.chosen{border-color:var(--tg-accent);background:var(--tg-selected);color:var(--tg-accent)}
+.theme-options button:hover{background:var(--tg-hover)}
+.load-older{
+ align-self:center;color:var(--tg-accent);background:var(--tg-surface);
+ border-radius:16px;padding:9px 16px;box-shadow:0 1px 4px var(--tg-shadow);
+ font-size:12px;margin:8px auto;
+}
+.load-older:hover{filter:brightness(.96)}
+.flight-ghost{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.37;padding:9px 12px 7px;contain:layout paint;will-change:transform,opacity}
+.theme-light .chat-wall{background-color:#dbe7db;background-image:radial-gradient(circle at 10px 12px,rgba(64,108,92,.06) 1.5px,transparent 2px);background-size:48px 48px}
+.theme-dark .chat-wall{background-color:#0e1621;background-image:radial-gradient(circle at 10px 12px,rgba(174,199,210,.04) 1.5px,transparent 2px);background-size:48px 48px}
+.theme-light .bubble{box-shadow:0 1px 2px rgba(46,63,54,.12)}
+.theme-dark .bubble{box-shadow:0 1px 2px rgba(0,0,0,.3)}
+@media(max-width:710px){
+ .message-scroll{gap:7px;padding:15px 10px 35px}
+ .bubble-text{font-size:15px}
+ .context-menu{max-width:calc(100vw - 24px)}
+ .composer{border-radius:17px}
+}
+@media(prefers-reduced-motion:reduce){
+ .context-menu,.about-modal{animation:none!important}
+ .flight-ghost{animation:none!important}
+}
