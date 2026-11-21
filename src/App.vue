@@ -32,6 +32,17 @@ const data = reactive<Record<number, Message[]>>({
 const activeId = ref(1)
 const activeChat = computed(() => chats.find(c => c.id === activeId.value) ?? chats[0]!)
 const messages = computed(() => data[activeId.value] ?? [])
+const visibleCount = ref(120)
+const visibleMessages = computed(() => messages.value.slice(-visibleCount.value))
+const hiddenMessageCount = computed(() => Math.max(0, messages.value.length - visibleCount.value))
+async function loadOlderMessages() {
+  const el = scrollEl.value
+  const oldHeight = el?.scrollHeight ?? 0
+  const oldTop = el?.scrollTop ?? 0
+  visibleCount.value += 120
+  await nextTick()
+  if (el) el.scrollTop = oldTop + el.scrollHeight - oldHeight
+}
 const query = ref('')
 const filtered = computed(() => chats.filter(c => (c.name + c.handle + c.preview).toLowerCase().includes(query.value.toLowerCase())))
 const text = ref('')
@@ -42,7 +53,11 @@ const lowPower = ref(false)
 const osReduced = ref(false)
 const compact = ref(false)
 const theme = ref<'light' | 'dark'>('light')
-function toggleTheme() { theme.value = theme.value === 'light' ? 'dark' : 'light' }
+function setTheme(value: 'light' | 'dark') {
+  theme.value = value
+  try { localStorage.setItem('motion-lab-theme', value) } catch { /* Storage may be disabled */ }
+}
+function toggleTheme() { setTheme(theme.value === 'light' ? 'dark' : 'light') }
 const inspectorOpen = ref(true)
 const mobileChats = ref(false)
 const showEmoji = ref(false)
@@ -80,6 +95,7 @@ function changeChat(id: number) {
   cancelFlight()
   pending.clear()
   activeId.value = id
+  visibleCount.value = 120
   mobileChats.value = false
   menu.value = null
   showEmoji.value = false
@@ -241,6 +257,7 @@ function runDemo(key: string) {
     const m = messages.value[messages.value.length - 1]
     if (m) { reply.value = m; composer.value?.focus(); notice('也可以右滑任意消息回复') }
   }
+  else if (key === 'stress') runStressDemo()
   else if (key === 'micro') { notice('这是一个轻量微交互反馈 ✨'); compact.value = !compact.value }
 }
 function onKey(e: KeyboardEvent) {
@@ -249,6 +266,10 @@ function onKey(e: KeyboardEvent) {
 }
 const onMediaChange = (e: MediaQueryListEvent) => { osReduced.value = e.matches }
 onMounted(() => {
+  try {
+    const saved = localStorage.getItem('motion-lab-theme')
+    if (saved === 'light' || saved === 'dark') theme.value = saved
+  } catch { /* Storage may be disabled */ }
   media = matchMedia('(prefers-reduced-motion: reduce)')
   osReduced.value = systemReducedMotion()
   media.addEventListener('change', onMediaChange)
@@ -262,13 +283,24 @@ onBeforeUnmount(() => {
   if (toastTimer) clearTimeout(toastTimer)
   cancelFlight()
 })
+function runStressDemo() {
+  // DOM stays bounded by visibleMessages while the store exercises heavy histories.
+  const chat = data[activeId.value]
+  if (!chat) return
+  for (let index = 0; index < 500; index++) {
+    chat.push({ id: ++nextId, text: `性能测试消息 ${index + 1} · Telegram 风格长消息列表滚动与切换。`, time: now(), mine: index % 3 === 0 })
+  }
+  void nextTick(scrollBottom)
+  notice('已生成 500 条消息 · 页面仅渲染最近 120 条')
+}
 const demos = [
   {key:'send',icon:Send,title:'消息飞入',desc:'输入框 → 气泡'},
   {key:'page',icon:ArrowLeftRight,title:'页面转场',desc:'连续切换'},
   {key:'popover',icon:MousePointerClick,title:'弹出菜单',desc:'锚点缩放'},
   {key:'reaction',icon:Heart,title:'表情反馈',desc:'弹性微交互'},
   {key:'swipe',icon:Reply,title:'手势回复',desc:'跟手与回弹'},
-  {key:'micro',icon:Zap,title:'微交互',desc:'即时状态反馈'}
+  {key:'micro',icon:Zap,title:'微交互',desc:'即时状态反馈'},
+  {key:'stress',icon:Zap,title:'压力测试',desc:'追加 500 条消息'}
 ]
 </script>
 
@@ -315,10 +347,11 @@ const demos = [
             <button class="icon-btn" title="聊天菜单" @click="lastMenu"><MoreVertical :size="21"/></button>
           </div>
           <div class="chat-wall">
-            <Transition name="chat-swap" mode="out-in">
+            <Transition name="chat-swap">
               <div :key="activeId" ref="scrollEl" class="message-scroll">
+                <button v-if="hiddenMessageCount" class="load-older" @click="loadOlderMessages">查看更早的 {{ hiddenMessageCount }} 条消息</button>
                 <div class="day-label"><span>今天</span></div>
-                <div v-for="m in messages" :key="m.id" class="message-row" :class="{ mine:m.mine, incoming:!m.mine }">
+                <div v-for="m in visibleMessages" :key="m.id" class="message-row" :class="{ mine:m.mine, incoming:!m.mine }">
                   <div v-if="!m.mine" class="mini-avatar" :style="{ background: activeChat.color }">{{ activeChat.avatar }}</div>
                   <div class="bubble" :class="{ 'is-pending': pending.has(m.id) }" :data-mid="m.id" @contextmenu="openMenu($event, m)" @pointerdown="startSwipe($event as PointerEvent, m)" @pointermove="moveSwipe($event as PointerEvent)" @pointerup="endSwipe($event as PointerEvent, m)" @pointercancel="endSwipe($event as PointerEvent, m)">
                     <span class="bubble-text">{{ m.text }}</span>
@@ -354,6 +387,13 @@ const demos = [
             </div>
           </div>
           <div class="inspector-section settings-section">
+            <div class="theme-setting">
+              <span class="field-label">外观主题</span>
+              <div class="theme-options" role="group" aria-label="外观主题">
+                <button :aria-pressed="theme === 'light'" :class="{ chosen:theme==='light' }" @click="setTheme('light')"><Sun :size="17"/> 浅色</button>
+                <button :aria-pressed="theme === 'dark'" :class="{ chosen:theme==='dark' }" @click="setTheme('dark')"><Moon :size="17"/> 深色</button>
+              </div>
+            </div>
             <div class="section-title"><span>动效参数</span><span class="section-gear"><Settings2 :size="19"/></span></div>
             <label class="field-label">缓动曲线 <span>{{ motionPresets[preset].label }}</span></label>
             <div class="preset-options"><button v-for="(option,key) in motionPresets" :key="key" :class="{ chosen:preset === key }" @click="preset = key">{{ option.label }}</button></div>
@@ -386,7 +426,7 @@ const demos = [
         <button @click="doMenu('react','💙')"><Heart :size="19"/> 快速点赞</button>
       </div>
     </div>
-    <div v-if="showAbout" class="modal-overlay" @click="showAbout=false"><div class="about-modal" @click.stop><button class="modal-close" @click="showAbout=false" aria-label="关闭"><X :size="22"/></button><span class="brand-symbol">✳</span><h2>Telegram Motion Lab</h2><p>独立制作的动效实验室，展示真实的发送、切换、菜单、表情与手势交互。此项目不属于 Telegram 官方。</p><div class="about-badges"><span>Vue 3</span><span>TypeScript</span><span>WAAPI</span><span>Vite 7</span></div><button class="about-done" @click="showAbout=false">继续体验</button></div></div>
+    <div v-if="showAbout" class="modal-overlay" @click="showAbout=false"><div class="about-modal" @click.stop><button class="modal-close" @click="showAbout=false" aria-label="关闭"><X :size="22"/></button><span class="brand-symbol"><MessageCircle :size="21"/></span><h2>Telegram Motion Lab</h2><p>独立制作的动效实验室，展示真实的发送、切换、菜单、表情与手势交互。此项目不属于 Telegram 官方。</p><div class="about-badges"><span>Vue 3</span><span>TypeScript</span><span>WAAPI</span><span>Vite 7</span></div><button class="about-done" @click="showAbout=false">继续体验</button></div></div>
     <Transition name="toast"><div v-if="toast" class="toast-msg">{{ toast }}</div></Transition>
   </div>
 </template>
