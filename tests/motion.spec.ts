@@ -46,6 +46,7 @@ test('theme choice persists through reload', async ({ page }) => {
   await expect(page.locator('.app-shell')).toHaveClass(/theme-dark/)
   await page.reload()
   await expect(page.locator('.app-shell')).toHaveClass(/theme-dark/)
+  await page.getByRole('button',{name:'打开动效设置'}).first().click()
   await page.getByRole('button',{name:'浅色',exact:true}).click()
   await expect(page.locator('.app-shell')).toHaveClass(/theme-light/)
 })
