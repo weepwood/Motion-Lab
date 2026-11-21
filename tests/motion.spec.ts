@@ -5,8 +5,8 @@ test('message flight settles and leaves visible bubble', async ({ page }) => {
   const input = page.getByRole('textbox', {name:'消息内容'})
   await input.fill('自动化测试发送轨迹')
   await input.press('Enter')
-  await expect(page.getByText('自动化测试发送轨迹', {exact:true})).toBeVisible()
   await expect(page.locator('.flight-ghost')).toHaveCount(0, {timeout:5000})
+  await expect(page.locator('.bubble-text').filter({hasText:'自动化测试发送轨迹'})).toBeVisible()
   await expect(page.locator('.bubble.is-pending')).toHaveCount(0)
 })
 
