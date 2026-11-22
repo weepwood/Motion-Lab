@@ -19,7 +19,7 @@ test('messenger layout loads; settings slide in inside the left column and close
   await expect(panel.getByRole('heading', { name: '设置', exact: true })).toBeVisible()
   await panel.getByRole('button', { name: '关闭设置', exact: true }).click()
   await expect(page.locator('.settings')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /Motion Design/ })).toBeVisible()
+  await expect(page.locator('.chat-entry').filter({ hasText: 'Motion Design' })).toBeVisible()
 })
 
 test('message flight settles and leaves a visible bubble', async ({ page }) => {
@@ -91,8 +91,8 @@ test('turning interface animations off sends without a flight', async ({ page })
 
 test('rapid chat switches and multiple sends clean up animations', async ({ page }) => {
   await page.goto('/')
-  const first = page.getByRole('button', { name: /Motion Design/ })
-  const second = page.getByRole('button', { name: /Alex Chen/ })
+  const first = page.locator('.chat-entry').filter({ hasText: 'Motion Design' })
+  const second = page.locator('.chat-entry').filter({ hasText: 'Alex Chen' })
   for (let i = 0; i < 12; i++) {
     await second.click()
     await first.click()
