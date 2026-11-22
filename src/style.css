@@ -144,6 +144,7 @@ button:disabled { cursor: not-allowed }
 
 .chat-list { position: relative; flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 6px 8px 12px }
 .chat-entry { display: flex; align-items: center; gap: 12px; width: 100%; height: 72px; padding: 0 9px; border-radius: 12px; text-align: left; transition: background-color var(--dur-micro) ease }
+.chat-entry > .avatar { z-index: 1 }
 .chat-entry:hover { background: var(--hover) }
 .chat-entry.selected { --ripple: rgba(255, 255, 255, .2); background: var(--selected); color: var(--on-accent) }
 .chat-entry.selected .chat-line small, .chat-entry.selected .chat-preview, .chat-entry.selected .list-check { color: inherit; opacity: .88 }
