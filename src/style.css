@@ -53,8 +53,9 @@ button:disabled { cursor: not-allowed }
   font-size: 16px; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
 }
 
-/* Ripple (zero specificity: never overrides a component's own positioning) */
-:where(.rippable) { position: relative; overflow: hidden }
+/* Establish an explicit paint boundary for each interactive control. */
+[data-rippable] { position: relative; overflow: hidden; contain: paint }
+.ripple-container { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; contain: paint; pointer-events: none }
 .ripple-wave { position: absolute; border-radius: 50%; background: var(--ripple); pointer-events: none; transform: scale(0) }
 
 /* All motion switched off: interface toggle or system "reduce motion". */
