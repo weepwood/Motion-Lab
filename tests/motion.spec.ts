@@ -72,6 +72,9 @@ test('500 messages are kept in bounded DOM and older messages can be loaded', as
   await page.getByRole('button',{name:'打开动效设置'}).first().click()
   await page.getByRole('button',{name:/压力测试/}).click()
   await expect(page.locator('.message-row')).toHaveCount(120)
+  // The settings drawer is modal: close it before interacting with chat history.
+  await page.getByRole('button', {name:'关闭动效设置'}).click()
+  await expect(page.locator('.inspector-scrim')).toHaveCount(0)
   const load = page.getByRole('button',{name:/查看更早的/})
   await expect(load).toBeVisible()
   await load.click()
