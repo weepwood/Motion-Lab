@@ -1,5 +1,15 @@
 import { play, settle, springValue, drag } from './easing.js'
 const running = new WeakMap()
+const physicalRuns = new WeakMap()
+const captureVelocities = new WeakMap()
+function velocityAt(el){
+ const run=physicalRuns.get(el)
+ if(!run||running.get(el)!==run.animation||run.animation.playState==='finished'||run.animation.playState==='idle')return undefined
+ const t=Number(run.animation.currentTime)||0, step=run.duration/(run.xs.length-1)
+ if(step<=0)return undefined
+ const i=Math.min(run.xs.length-2,Math.max(0,Math.floor(t/step)))
+ return [(run.xs[i+1].value-run.xs[i].value)*1000/step,(run.ys[i+1].value-run.ys[i].value)*1000/step]
+}
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 const animate = (el, frames, duration, easing, extra = {}) => {
   running.get(el)?.cancel()
@@ -12,9 +22,12 @@ const animate = (el, frames, duration, easing, extra = {}) => {
   return animation
 }
 export function captureLayout(elements) {
-  return new Map(Array.from(elements, el => [el, el.getBoundingClientRect()]))
+  const list=Array.from(elements)
+  const rects=new Map(list.map(el=>[el,el.getBoundingClientRect()]))
+  captureVelocities.set(rects,new Map(list.map(el=>[el,velocityAt(el)])))
+  return rects
 }
-export function animateLayout(before, { duration = 320, easing = 'cubic-bezier(.23,1,.32,1)' } = {}) {
+export function animateLayout(before, { duration = 320, easing = 'cubic-bezier(.23,1,.32,1)', physics } = {}) {
   const entries = [...before].filter(([el]) => el.isConnected)
   // Capture visual positions before callers mutate; cancel old transforms before measuring the new layout.
   for (const [el] of entries) running.get(el)?.cancel()
@@ -23,12 +36,24 @@ export function animateLayout(before, { duration = 320, easing = 'cubic-bezier(.
     if (!last.width || !last.height) return []
     const x = first.left - last.left, y = first.top - last.top, sx = first.width / last.width, sy = first.height / last.height
     if (Math.abs(x) + Math.abs(y) + Math.abs(sx - 1) + Math.abs(sy - 1) < .01) return []
+    if(physics&&duration>0){
+      const prior=captureVelocities.get(before)?.get(el)
+      const opts={...physics,duration},xs=physicalSpringFrames(x,0,{...opts,velocity:prior?.[0]??physics.velocity??0}),ys=physicalSpringFrames(y,0,{...opts,velocity:prior?.[1]??0})
+      const scalesX=physicalSpringFrames(sx,1,{...opts,velocity:0}),scalesY=physicalSpringFrames(sy,1,{...opts,velocity:0})
+      const frames=xs.map((v,i)=>({offset:v.offset,transformOrigin:'0 0',transform:'translate('+v.value+'px,'+ys[i].value+'px) scale('+Math.max(.01,scalesX[i].value)+','+Math.max(.01,scalesY[i].value)+')'}))
+      const anim=animate(el,frames,duration,'linear')
+      if(anim)physicalRuns.set(el,{animation:anim,xs,ys,duration})
+      return anim?[anim]:[]
+    }
+    physicalRuns.delete(el)
     const anim = animate(el, [{ transformOrigin: '0 0', transform: 'translate('+x+'px,'+y+'px) scale('+sx+','+sy+')' }, { transformOrigin: '0 0', transform: 'none' }], duration, easing)
     return anim ? [anim] : []
   })
 }
 export function sharedElement(source, target, options) {
-  return animateLayout(new Map([[target, source.getBoundingClientRect()]]), options)
+  const rects=new Map([[target,source.getBoundingClientRect()]])
+  captureVelocities.set(rects,new Map([[target,velocityAt(source)]]))
+  return animateLayout(rects, options)
 }
 export function springFrames(from, to, bounce = .3, samples = 48) {
   const count = Math.max(2, Math.min(120, Math.round(samples)))
@@ -41,7 +66,7 @@ export function staggerIn(elements, { duration = 300, stagger = 45, distance = 1
   })
 }
 export function cancelLayout(elements) {
-  for (const el of elements) running.get(el)?.cancel()
+  for (const el of elements) {running.get(el)?.cancel();physicalRuns.delete(el)}
 }
 
 /** Analytic damped oscillator, velocity in units/s, duration in ms. Last sample snaps to target for finite previews. */
@@ -55,11 +80,14 @@ export function physicalSpringFrames(from,to,{mass=1,stiffness=180,damping=18,ve
     const b=Math.sqrt(a*a-w*w),r1=-a+b,r2=-a-b,A=(v-r2*x)/(r1-r2)
     return A*Math.exp(r1*t)+(x-A)*Math.exp(r2*t)
   }
-  return Array.from({length:count+1},(_,i)=>({offset:i/count,value:i===count?to:to+position(Math.max(0,duration)/1000*i/count)}))
+  return Array.from({length:count+1},(_,i)=>{
+    const offset=i/count,tail=Math.max(0,(offset-.85)/.15),blend=1-tail*tail*(3-2*tail)
+    return {offset,value:i===count?to:to+position(Math.max(0,duration)/1000*offset)*blend}
+  })
 }
 
 /** Interruptible spring drag, shared by previews and generated applications. */
-export function attachSpringDrag(el,{duration=320,onRecord=()=>{},onInterrupt=()=>{}}={}){
+export function attachSpringDrag(el,{duration=320,physics={},onRecord=()=>{},onInterrupt=()=>{}}={}){
   let returning=null, x=0,y=0,originX=0,originY=0,start=0,samples=[]
   const original=el.style.transform
   const detach=drag(el,{
@@ -87,7 +115,7 @@ export function attachSpringDrag(el,{duration=320,onRecord=()=>{},onInterrupt=()
       onRecord(samples.map(s=>({...s})))
       el.style.transform=original
       if(reduced()||duration<=0)return
-      const xs=physicalSpringFrames(x,0,{duration,velocity:vx}),ys=physicalSpringFrames(y,0,{duration,velocity:vy})
+      const xs=physicalSpringFrames(x,0,{...physics,duration,velocity:vx}),ys=physicalSpringFrames(y,0,{...physics,duration,velocity:vy})
       returning=play(el,xs.map((s,i)=>({offset:s.offset,transform:'translate('+s.value+'px,'+ys[i].value+'px)'})),duration,'linear')
     }
   })

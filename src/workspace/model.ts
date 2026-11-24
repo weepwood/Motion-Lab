@@ -12,7 +12,7 @@ export const catalog: { id: Effect; title: string; category: string; desc: strin
   { id: 'shared', title: '共享元素转场', category: '布局', desc: '同一视觉对象跨容器过渡' },
   { id: 'drag', title: '拖拽与复位', category: '手势', desc: '指针捕获与实时跟手' }
 ]
-export const defaults = (effect: Effect = 'slide'): Config => ({ effect, duration: 320, curve: [.23,1,.32,1], bounce: .3, distance: 110, stagger: 45, middle: .5, frames: [] })
+export const defaults = (effect: Effect = 'slide'): Config => ({ effect, duration: 320, curve: [.23,1,.32,1], bounce: .3, distance: 110, stagger: 45, middle: .5, frames: [], ...(effect==='shared'||effect==='drag'?{physics:{mass:1,stiffness:180,damping:18,velocity:0}}:{}) })
 const n = (v: unknown, lo: number, hi: number, d: number) => typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d
 export function sanitizeConfig(raw: unknown): Config {
   if (!raw || typeof raw !== 'object') throw Error('配置必须为对象')

@@ -214,3 +214,96 @@ test('repeat interaction benchmark and resource cleanup',async({page,browserName
  const {writeFile}=await import('node:fs/promises')
  await writeFile(testInfo.outputPath('benchmark.json'),JSON.stringify({browser:browserName,...results},null,2))
 })
+
+test('composition project merge, track keyframes and grouped delay',async({page})=>{
+ await page.goto('/?workspace=1')
+ await page.getByRole('button',{name:'多轨道',exact:true}).click()
+ await page.getByRole('button',{name:'新增轨道',exact:true}).click()
+ await page.getByRole('button',{name:'添加关键帧 50%'}).click()
+ await expect(page.getByRole('button',{name:'轨道 1 关键帧 50%'})).toBeVisible()
+ await page.getByLabel('轨道分组').fill('group')
+ await page.getByRole('button',{name:'组后移'}).click()
+ await expect(page.getByLabel('轨道延迟')).toHaveValue('20')
+ const [file]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'导出编排 JSON'}).click()])
+ await page.getByLabel('导入编排项目').setInputFiles(await file.path())
+ await expect(page.locator('.ws-composition-row')).toHaveCount(2)
+ await page.getByRole('button',{name:'新增手势轨道'}).click()
+ await expect(page.getByRole('button',{name:'录制轨迹'})).toBeVisible()
+ const [html]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'导出编排 HTML'}).click()])
+ const {readFile}=await import('node:fs/promises');const standalone=await page.context().newPage()
+ try{await standalone.goto('data:text/html;charset=utf-8,'+encodeURIComponent(await readFile(await html.path(),'utf8')));await expect(standalone.locator('main section')).toHaveCount(3);await standalone.getByRole('button',{name:'播放编排'}).click()}finally{await standalone.close()}
+})
+test('editor panels collapse and keyboard resize',async({page})=>{
+ await page.goto('/?workspace=1')
+ const handle=page.getByRole('separator',{name:'调整资源面板宽度'})
+ await handle.focus();await handle.press('ArrowRight')
+ await expect(handle).toHaveAttribute('aria-valuenow','254')
+ await page.getByRole('button',{name:'切换资源面板'}).click()
+ await expect(page.getByLabel('搜索动效')).not.toBeVisible()
+ await page.getByRole('button',{name:'切换资源面板'}).click()
+ await expect(page.getByLabel('搜索动效')).toBeVisible()
+})
+
+test('physical layout retarget retains visual position and clears animation',async({page})=>{
+ await page.goto('/?workspace=1')
+ const result=await page.evaluate(async()=>{
+  const {captureLayout,animateLayout,cancelLayout}=await import(/* @vite-ignore */ new URL('./packages/motion/index.js',location.href).href)
+  const el=document.createElement('div');el.style.cssText='position:fixed;left:10px;top:10px;width:50px;height:50px';document.body.append(el)
+  const opts={duration:500,physics:{mass:1,stiffness:180,damping:18}}
+  try{
+   let before=captureLayout([el]);el.style.left='200px';const first=animateLayout(before,opts)[0];first.pause();first.currentTime=100
+   const visual=el.getBoundingClientRect().left;before=captureLayout([el]);el.style.left='80px'
+   const next=animateLayout(before,opts)[0];next.pause();next.currentTime=0
+   const after=el.getBoundingClientRect().left;next.currentTime=500;const end=el.getBoundingClientRect().left
+   cancelLayout([el]);return {jump:Math.abs(visual-after),end,remaining:el.getAnimations().length}
+  }finally{el.remove()}
+ })
+ expect(result.jump).toBeLessThan(1);expect(result.end).toBeCloseTo(80);expect(result.remaining).toBe(0)
+})
+
+test('long interaction stability and Chromium heap sampling',async({page,browserName},testInfo)=>{
+ test.setTimeout(90000)
+ await page.goto('/?workspace=1')
+ const cdp=browserName==='chromium'?await page.context().newCDPSession(page):null
+ async function heap(){if(!cdp)return null;await cdp.send('HeapProfiler.collectGarbage');const h=await cdp.send('Runtime.getHeapUsage');return {usedSize:h.usedSize,totalSize:h.totalSize}}
+ async function repeat(count:number){
+   return await page.evaluate(async(count)=>{
+     const {captureLayout,animateLayout,cancelLayout}=await import(/* @vite-ignore */ new URL('./packages/motion/index.js',location.href).href)
+     const root=document.createElement('div');root.style.cssText='position:fixed;inset:0;display:flex;flex-wrap:wrap;pointer-events:none';document.body.append(root)
+     const nodes=Array.from({length:80},()=>{const el=document.createElement('div');el.style.cssText='width:24px;height:24px;margin:2px';root.append(el);return el})
+     const samples:number[]=[];let last=performance.now()
+     try{
+       for(let i=0;i<count;i++){
+         const before=captureLayout(nodes);root.append(root.firstElementChild!);animateLayout(before,{duration:100})
+         await new Promise<void>(resolve=>requestAnimationFrame(()=>{const now=performance.now();samples.push(now-last);last=now;resolve()}))
+       }
+       cancelLayout(nodes);const residual=nodes.reduce((n,el)=>n+el.getAnimations().length,0);root.remove()
+       samples.sort((a,b)=>a-b);return {count,samples:samples.length,p50:samples[Math.floor(samples.length/2)],p95:samples[Math.floor((samples.length-1)*.95)],residual,detached:nodes.every(el=>!el.isConnected)}
+     }finally{cancelLayout(nodes);root.remove()}
+   },count)
+ }
+ try{
+   await repeat(20);const before=await heap()
+   const first=await repeat(120),middle=await heap(),second=await repeat(120),after=await heap()
+   for(const result of [first,second]){expect(result.residual).toBe(0);expect(result.detached).toBeTruthy();expect(result.samples).toBe(120)}
+   const {writeFile}=await import('node:fs/promises')
+   await writeFile(testInfo.outputPath('benchmark.json'),JSON.stringify({browser:browserName,first,second,heap:{before,middle,after},note:'GC heap sample Chromium only; not a proof of absence of leaks'},null,2))
+ }finally{await cdp?.detach()}
+})
+test('composition gesture recording, notification scene and visual evidence',async({page,browserName},testInfo)=>{
+ await page.goto('/?workspace=1');await page.setViewportSize({width:1440,height:900})
+ await page.getByRole('button',{name:'通知提示',exact:true}).click()
+ await expect(page.getByText('任务已完成',{exact:true})).toBeVisible()
+ await page.screenshot({path:testInfo.outputPath(browserName+'-notification.png')})
+ await page.getByRole('button',{name:'多轨道',exact:true}).click()
+ await page.getByRole('button',{name:'新增轨道',exact:true}).click()
+ await page.getByRole('button',{name:'新增手势轨道'}).click()
+ await page.getByRole('button',{name:'录制轨迹'}).click()
+ const el=page.locator('.ws-composition-preview .draggable');await expect(el).toBeVisible()
+ const rect=await el.boundingBox();if(!rect)throw Error('gesture preview missing')
+ await page.mouse.move(rect.x+rect.width/2,rect.y+rect.height/2);await page.mouse.down();await page.mouse.move(rect.x+rect.width/2+35,rect.y+rect.height/2,{steps:8});await page.mouse.up()
+ await expect(page.getByRole('button',{name:'结束录制'})).toBeVisible()
+ await page.getByRole('button',{name:'结束录制'}).click()
+ await expect.poll(async()=>page.evaluate(()=>{const data=JSON.parse(localStorage.getItem('motion-lab-composition-v1')||'[]');return data.find((t:any)=>t.config.effect==='drag')?.gesture?.length??0})).toBeGreaterThan(1)
+ await page.screenshot({path:testInfo.outputPath(browserName+'-composition.png')})
+})

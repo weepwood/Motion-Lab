@@ -4,7 +4,7 @@ const library = './motion-kit/index.js'
 const extensions: Record<Format,string>={Vue:'vue',React:'jsx',JavaScript:'js',CSS:'css',Tokens:'json',AI:'md'}
 export const extensionFor=(format:Format)=>extensions[format]
 function interactionBody(c:Config){
-  const opts=JSON.stringify({duration:c.duration,easing:easingOf(c)})
+  const opts=JSON.stringify({duration:c.duration,easing:easingOf(c),physics:c.physics})
   return `// Copy packages/motion to ./motion-kit, or change the import path.
 import { captureLayout, animateLayout, cancelLayout, attachSpringDrag } from "${library}";
 function mountMotion(root) {
@@ -37,7 +37,7 @@ function mountMotion(root) {
     animateLayout(first,options);
   }
   if(effect === "drag") {
-    detach = attachSpringDrag(items[0], { duration: options.duration });
+    detach = attachSpringDrag(items[0], { duration: options.duration, physics: options.physics });
   } else { root.append(button); button.addEventListener("click",run); }
   return () => {
     detach?.(); cancelLayout(items);
