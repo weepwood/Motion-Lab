@@ -95,3 +95,7 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - GitHub 连接器不支持直接创建 Tag/Release；增加仅主分支 push 完整 CI 成功、同 SHA Pages 成功、线上生产文件与已验收 dist 哈希一致及 Chromium 三入口/JSON 导入导出回归后执行的 V3.4.0 专用工作流。先创建 draft，下载资产校验 ZIP/SHA256 后公开，核对 tag SHA；不覆盖已发布版本。PR 分支不会执行发布。
 
 - 响应式修复 CI 45404101335：88/88，23+8 CRC，Vue/React 运行通过；15 张截图复查，WebKit 动态缩小 2078→964 CSS px，三浏览器首次移动聚焦 844px。120×2 P95 Chromium 17.2/18.3、Firefox 21/21、WebKit 26/18ms；GC heap 4979800→5073312→5028496 B（+48696，约0.98%），残留 0；30 次 WebKit P95 57ms，列为非阻塞观察项。发布门禁显式 GH_REPO，部署查询以 jq --arg 精确 SHA 过滤；CI 增加生产冒烟脚本语法校验。
+
+## V3.4.0 主分支验收与触发器修复
+- PR #11 最终 CI 45404785640：88/88、23+8 ZIP CRC、Vue/React 编排实际运行；15 张截图复查通过，长循环 P95 18.3/17.5、20/20、18/18 ms，GC heap 4979568→5073516→5028496 B，残留 0。合并 918c5da，主分支 CI 45405447229 88/88、Pages 45405447147 成功。
+- 发布 workflow_run 未触发：含逗号的 workflow 名在 YAML flow 序列被拆成两个名称。改为 main push / 手动触发，内部等待精确 SHA 的完整 CI 与 Pages 成功，保留线上哈希、浏览器、ZIP/SHA256 与 Tag 门禁。发布触发器修复不增加产品功能。
