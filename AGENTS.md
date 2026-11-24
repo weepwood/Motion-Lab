@@ -44,3 +44,5 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - HTML 内联 ESM 依赖源码，需实际运行验证；Vue/React 独立项目构建与 ZIP 包仍待完成。截图由 CI 采集，不等于人工视觉验收；性能指标是 rAF 估算而非 GPU/内存基准。保留旧存储键与已有资产。
 
 - PR #7 首次 CI 42 通过、1 失败：Firefox CSS 序列化差异。改用 DOMMatrixReadOnly.m41 数值断言，并同步到本分支。截图 artifact 总是上传；新增独立 HTML 实际运行回归。
+
+- 完整 ZIP 导出包含全部格式、HTML、配置及 motion-kit；独立 CI job 在临时 Vue / React 工程构建 8 种效果，React 仅为验证依赖。拆分 SettingsMechanisms。新增关键帧拖动和 ZIP 测试。均待 CI 验证。
