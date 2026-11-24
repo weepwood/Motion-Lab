@@ -4,7 +4,7 @@ test('workspace navigation, preview, presets, A/B, export and persistence',async
   await page.goto('/?workspace=1')
   await expect(page.getByRole('heading',{name:'滑动转场'})).toBeVisible()
   await page.getByRole('textbox',{name:'搜索动效'}).fill('spring')
-  await page.getByRole('button',{name:/阻尼弹簧/}).click()
+  await page.getByRole('button',{name:'阻尼弹簧',exact:true}).click()
   await expect(page.getByRole('heading',{name:'阻尼弹簧'})).toBeVisible()
   await page.getByRole('button',{name:'固定为 B 对比'}).click()
   await expect(page.getByLabel('B · 快照')).toBeVisible()
@@ -22,7 +22,7 @@ test('workspace navigation, preview, presets, A/B, export and persistence',async
 test('layout reorder and mobile workspace',async({page})=>{
   await page.setViewportSize({width:390,height:844})
   await page.goto('/?workspace=1')
-  await page.getByRole('button',{name:/FLIP 列表重排/}).click()
+  await page.getByRole('button',{name:'FLIP 列表重排',exact:true}).click()
   const cards=page.locator('.ws-tiles .ws-object')
   await expect(cards.first()).toHaveText('1')
   await page.getByRole('button',{name:'执行布局转场'}).click()

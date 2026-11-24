@@ -35,7 +35,7 @@ const perf=computed(()=>{const a=[...intervals.value].sort((x,y)=>x-y);if(!a.len
  <main class="ws">
   <header class="ws-top"><div><b>Motion Lab</b><span> / 交互动效工作台</span></div><nav><a href="./">聊天实验场</a><a href="./demo/">独立 Demo</a></nav></header>
   <aside class="ws-nav"><h2>动效资源</h2><input v-model="query" aria-label="搜索动效" placeholder="搜索动效…"><div class="ws-categories"><button v-for="c in categories" :key="c" :aria-pressed="category===c" @click="category=c">{{c}}</button></div>
-   <div v-for="item in filtered" :key="item.id" class="ws-entry"><button :aria-pressed="config.effect===item.id" @click="choose(item.id)"><b>{{item.title}}</b><small>{{item.desc}}</small></button><button :aria-label="'收藏 '+item.title" :aria-pressed="store.favorites.includes(item.id)" @click="favorite(item.id)">{{store.favorites.includes(item.id)?'★':'☆'}}</button></div>
+   <div v-for="item in filtered" :key="item.id" class="ws-entry"><button :aria-label="item.title" :aria-pressed="config.effect===item.id" @click="choose(item.id)"><b>{{item.title}}</b><small>{{item.desc}}</small></button><button :aria-label="'收藏 '+item.title" :aria-pressed="store.favorites.includes(item.id)" @click="favorite(item.id)">{{store.favorites.includes(item.id)?'★':'☆'}}</button></div>
    <p v-if="!filtered.length">暂无匹配动效</p>
    <h2>研究预设</h2><div v-for="(s,i) in styles" :key="s.name" class="ws-study"><button @click="preset(i)">{{s.name}}</button><a :href="s.url" target="_blank" rel="noopener">参考：{{s.source}}</a><small>独立近似，非官方实测值</small></div>
   </aside>
