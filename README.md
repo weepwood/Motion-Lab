@@ -77,10 +77,11 @@ src/
 ├── settings.ts                三层配置模型（等级 / 类别覆盖 / 机制参数）+ 存储校验与迁移、环境监听
 ├── motion.ts                  适配层：UI 缓动预设 + 把设置/机制参数桥接到 packages/motion
 ├── presets.ts                 手感预设（含「Telegram 官方手感」实测值）与配置导入导出
+├── aiExport.ts                AI 复刻提示词编译器（实时三层配置 → 结构化 prompt + JSON 附录）
 ├── ripple.ts                  v-ripple 指令（包装 motion-kit 的 attachRipple，token 桥接）
 ├── style.css                  主题变量与全部样式（时长/曲线/位移分离 token 均来自 CSS 变量）
 └── components/                （SettingsPanel 为异步分包，不进首屏）
-    ├── SettingsPanel.vue      推入式设置页（主页 / 通用 / 动画与省电 / 实验室：机制参数）
+    ├── SettingsPanel.vue      推入式设置页（主页 / 通用 / 动画与省电 / 实验室：机制参数 / AI 复刻导出）
     ├── CurveEditor.vue        可拖动的曲线编辑器 + 播放预览
     ├── CompareLanes.vue       曲线对比赛道
     └── ToggleRow.vue / RadioRow.vue / RangeSlider.vue

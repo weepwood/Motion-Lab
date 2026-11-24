@@ -8,6 +8,15 @@ async function openFromMainMenu(page: Page, item: string) {
   await expect(page.getByRole('region', { name: '设置面板' })).toBeVisible()
 }
 
+/**
+ * 设置页的 tab 用 Transition 叠层：转场期间上一屏仍在 DOM 里，也带着自己的
+ * “返回”按钮。作用域限定在面板内并取最后一个，避免 strict 模式下命中两个。
+ */
+function backButton(page: Page) {
+  return page.getByRole('region', { name: '设置面板' })
+    .getByRole('button', { name: '返回', exact: true }).last()
+}
+
 test('messenger layout loads; settings slide in inside the left column and close again', async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('.workspace')).toBeVisible()
@@ -223,17 +232,56 @@ test('AI export turns the live config into a faithful reproduction prompt', asyn
   await page.getByRole('radio', { name: /Vue 3/ }).click()
   await expectPrompt('Vue 特定要求')
   // 改全局时长 → 提示词自动跟随实时配置
-  await page.getByRole('button', { name: '返回', exact: true }).click()
+  await backButton(page).click()
   await page.getByRole('button', { name: /动画与省电/ }).click()
   await page.locator('#duration').fill('500')
-  await page.getByRole('button', { name: '返回', exact: true }).click()
+  await backButton(page).click()
   await page.getByRole('button', { name: /AI 复刻导出/ }).click()
   await expectPrompt('基础时长 500 ms')
   // 全套模式：12 个效果都在
   await page.getByText('导出全套动效系统', { exact: true }).click()
-  const count = await promptValue().then(v => (v.match(/# 动效复刻任务/g) || []).length)
-  expect(count).toBeGreaterThanOrEqual(12)
+  await expect.poll(async () => (await promptValue()).match(/# 动效复刻任务/g)?.length ?? 0)
+    .toBeGreaterThanOrEqual(12)
   await expectPrompt('动效系统总览')
+})
+
+test('AI export re-derives every number when power saving or mechanism switches change', async ({ page }) => {
+  await page.goto('/')
+  await openFromMainMenu(page, '设置')
+  await page.getByRole('button', { name: /AI 复刻导出/ }).click()
+  const out = page.locator('.export-io')
+  const promptValue = () => out.evaluate((el: HTMLTextAreaElement) => el.value)
+  const expectPrompt = async (substring: string) => {
+    await expect.poll(async () => (await promptValue()).includes(substring), { timeout: 4000 }).toBe(true)
+  }
+  // 基线：完整等级下发送飞行用的是配置里的 320ms
+  await expectPrompt('| 飞行时长 | `320 ms` |')
+  // 开着省电 → 等级最多 1，heavy 类别被停用：数值必须归 0（旧实现会静默保留 320ms）
+  await backButton(page).click()
+  await page.getByRole('button', { name: /动画与省电/ }).click()
+  await page.getByText('始终开启', { exact: true }).click()
+  await backButton(page).click()
+  await page.getByRole('button', { name: /AI 复刻导出/ }).click()
+  await expectPrompt('| 飞行时长 | `0 ms` |')
+  // 涟漪是 heavy 类别：等级 1 下时长归 0，提示词必须改口去讲 120ms 闪白分支
+  await page.getByRole('radio', { name: '按下涟漪' }).click()
+  await expectPrompt('| 波纹时长 | `0 ms` |')
+  await expectPrompt('当前等级 ≤1（heavy 效果停用）')
+  // 关掉省电 → 数值回到基准（涟漪 = 320ms × 1.5 = 480ms）
+  await backButton(page).click()
+  await page.getByRole('button', { name: /动画与省电/ }).click()
+  await page.locator('label.radio-row').filter({ hasText: '关闭' }).click()
+  await backButton(page).click()
+  await page.getByRole('button', { name: /AI 复刻导出/ }).click()
+  await expectPrompt('| 波纹时长 | `480 ms` |')
+  // 机制开关同样要进提示词：关掉锚点补偿后不能再写成“由本实现接管”
+  await backButton(page).click()
+  await page.getByRole('button', { name: /动效实验室/ }).click()
+  await page.getByText('锚点补偿', { exact: true }).click()
+  await backButton(page).click()
+  await page.getByRole('button', { name: /AI 复刻导出/ }).click()
+  await page.getByRole('radio', { name: /滚动锚点/ }).click()
+  await expectPrompt('关闭（交给浏览器原生 scroll anchoring）')
 })
 
 test('CI gate: a typical journey produces no console errors', async ({ page }) => {

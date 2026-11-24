@@ -56,6 +56,9 @@ const num = (n: number, unit = 'ms') => `${Math.round(n)}${unit === 'ms' ? ' ms'
 
 function effectSpecs(): EffectSpec[] {
   const m = settings.mech
+  // heavy 类别在等级 ≤1 时被停用（durationFor 返回 0）：单独取一次，
+  // 既用于参数表，也用于判断该走扩圈还是闪白降级分支。
+  const rippleMs = durationFor('ripple')
   return [
     {
       id: 'send',
@@ -82,14 +85,14 @@ function effectSpecs(): EffectSpec[] {
       acceptance: [
         '飞行轨迹是一条弧线且淡入落位，肉眼可见两条曲线的时差',
         '飞行进行中再次发送：旧飞行立即取消、无克隆残留（DOM 里搜不到克隆节点）',
-        ' prefers-reduced-motion 时毫不飞行，消息直接出现',
+        'prefers-reduced-motion 时毫不飞行，消息直接出现',
         '动画期间不引起布局抖动（只动 transform/opacity）'
       ]
     },
     {
       id: 'reaction',
       title: '表情回应（解析抛物线飞行 + 落点弹跳 + 粒子迸发）',
-      summary: '从选中的菜单按钮位置放飞一枚 emoji，沿真实二次抛物线（16 站关键帧）飞进目标气泡的回应标签；飞行到 75% 时落点提前显影并弹跳，落定瞬间爆发一圈小表情粒子。',
+      summary: `从选中的菜单按钮位置放飞一枚 emoji，沿真实二次抛物线（16 站关键帧）飞进目标气泡的回应标签；飞行到 ${Math.round(m.reactionLanding * 100)}% 时落点提前显影并弹跳，落定瞬间爆发一圈小表情粒子。`,
       tokens: [
         { name: '飞行时长', value: num(durationFor('reaction')), note: 'iOS 原版 200ms 过快，实测 300ms 手感更佳' },
         { name: '中程抬升 ELEVATION', value: num(m.reactionElevation, 'px'), note: '路径中点比直线中点高出的像素' },
@@ -121,8 +124,15 @@ function effectSpecs(): EffectSpec[] {
       title: '按下涟漪（最远角半径 + 指数淡出）',
       summary: '按下的位置为中心生成一个圆形波纹，半径取「按下点到控件最远角」的距离，因此一波就能盖满整个控件；松手后波纹在剩余时长的 1/2 内淡出。触屏移动超过 8px 视为滚动，涟漪立即放弃。',
       tokens: [
-        { name: '波纹时长', value: num(durationFor('ripple')), note: '在运行时从 CSS 变量读回，保证 JS/CSS 单源' },
+        {
+          name: '波纹时长',
+          value: num(rippleMs),
+          note: rippleMs === 0
+            ? '当前等级 ≤1（heavy 效果停用）：此时走下面的 120ms 闪白降级分支'
+            : '在运行时从 CSS 变量读回，保证 JS/CSS 单源'
+        },
         { name: '波纹曲线', value: easingFor('ripple'), note: '' },
+        { name: '降级闪白 FLASH', value: '120 ms', note: '等级 ≤1：不扩圈，opacity 0 → 1 的闪白；松手淡出 60 ms' },
         { name: '起始 scale', value: String(m.rippleStart), note: '触屏指针取 ≥0.27 起步，视觉上更跟手' },
         { name: '结束 scale', value: String(m.rippleEnd), note: '结束时刻恰好盖满最远角' }
       ],
@@ -131,6 +141,7 @@ function effectSpecs(): EffectSpec[] {
         '波纹直径 = 2 × 半径，left/top = 按下点 − 半径',
         'WAAPI 播放 transform: scale(起始) → scale(结束)，fill: forwards；easing 从 CSS 变量读取。',
         'pointerup：计算已经过时间 elapsed，淡出时长 = 总时长/2，若 elapsed + 淡出 > 总时长则立即开始淡出，否则延迟 总时长 − elapsed − 淡出 后开始；淡出用 ease-out，结束后移除节点。',
+        '等级 ≤1 降级（tweb animation-level 语义：减弱而非删除）：不扩圈，波纹固定 scale(结束值)，只播 opacity 0 → 1 的 120ms 闪白，松手淡出只有 60ms。',
         '触屏 pointermove 与按下点距离 > 8px 即立刻走淡出（把机会让给滚动）。',
         '注意控件若 position 为 static 需临时置 relative；裁剪层波及不到控件外部。'
       ],
@@ -141,6 +152,7 @@ function effectSpecs(): EffectSpec[] {
       acceptance: [
         '无论点在控件的哪个角落，波纹都能盖满整个控件',
         '短按：波纹存活完整时长后淡出；长按：松手后 1/2 时长内淡出',
+        '等级 ≤1 时表现为 120ms 闪白（不扩圈），松手 60ms 内消失',
         '触屏按住后往上滑动：波纹立即消失，页面正常滚动',
         '同一控件连点多次：多波共存互不干扰，节点最终全部回收'
       ]
@@ -184,7 +196,7 @@ function effectSpecs(): EffectSpec[] {
         '整个切换包进 document.startViewTransition(() => { 变更主题类/变量 })，颜色在回调里瞬时落地。',
         '等待 transition.ready；之后在 document.documentElement.animate 上播放 clipPath 关键帧，pseudoElement 指定为 \'::view-transition-new(root)\'。',
         '关键帧从 circle(0px at x y) 到 circle(Rpx at x y)，R 见数学。',
-        '全局 CSS 需要 ::view-transition-old(new)(root) { animation: none; mix-blend-mode: normal } 关掉默认交叉淡，揭示才不会叠味。',
+        '全局 CSS 需要 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal } 关掉默认交叉淡，揭示才不会叠味。',
         '降级：不支持 View Transitions 的浏览器直接执行主题回调；动画被打断（页面隐藏等）也要保证回调已执行。'
       ],
       math: [
@@ -201,7 +213,7 @@ function effectSpecs(): EffectSpec[] {
     {
       id: 'push',
       title: '列推挤导航（新页整宽推入，旧页视差压暗）',
-      summary: '主从导航转场：新页面从右整宽滑入压上来，旧页面不是瞬移消失，而是退开 15% 视差并压暗到 84% 亮度，暗示层级关系（tweb slideNavigation）。',
+      summary: `主从导航转场：新页面从右整宽滑入压上来，旧页面不是瞬移消失，而是退开 ${m.navParallax}% 视差并压暗到 ${m.navDim}% 亮度，暗示层级关系（tweb slideNavigation）。`,
       tokens: [
         { name: '推入时长', value: num(durationFor('sidebar')), note: '' },
         { name: '推入曲线', value: easingFor('sidebar'), note: '' },
@@ -228,7 +240,7 @@ function effectSpecs(): EffectSpec[] {
     {
       id: 'chat',
       title: '会话切换横滑（方向感知 + 渐隐）',
-      summary: '列表切到另一会话时旧聊天区向滑动方向淡出、新聊天区从同方向 40px 处浮入方向达成记忆；方向由两个会话在列表里的索引先后决定。',
+      summary: '列表切到另一会话时，旧聊天区朝切换方向淡出，新聊天区从同方向 40px 处浮入——进退同向，让用户记住“往哪个方向翻了一页”；方向由两个会话在列表里的索引先后决定。',
       tokens: [
         { name: '转场时长', value: num(durationFor('chat')), note: '' },
         { name: '转场曲线', value: easingFor('chat'), note: '位移与淡入同长' }
@@ -281,10 +293,10 @@ function effectSpecs(): EffectSpec[] {
         { name: '展开比例', value: 'scale(0.85) → scale(1)', note: '不改尺寸，避免文字抖动' }
       ],
       steps: [
-        '点击捕捉 clientX/Y；菜单宽高确定后（先渲染为 visibility hidden 可测），左侧 = x − 256 + 8 > 视口宽 ? x − 256 : x，顶部同理，并与 8px 安全边距 clamp。',
+        '点击捕捉 clientX/Y；用固定常量 256×232 作为菜单尺寸（无需测量，实测 Telegram 就是这个尺寸）：左侧 = x + 256 + 8 > 视口宽 ? x − 256 : x，顶部同理，再与 8px 安全边距 clamp。',
         'transform-origin 取指针在菜单内的命中坐标：origin = (指针x − 菜单left)px (指针y − 菜单top)px。',
-        '出现：opacity 0 + scale(.85) → 1；离开：展开时长×0.7 的 ease-in 反向。differ scale3d(1,1,1) 替代 scale(1) 可修一些引擎下的文字抖动。',
-        '菜单疑似设计上 rows: 256px 宽是 Telegram 实测，不要随意改动；触屏长按 400–480ms 触发 + vibrate。',
+        '出现：opacity 0 + scale(.85) → 1；离开：展开时长×0.7 的 ease-in 反向。收尾用 scale3d(1,1,1) 而不是 scale(1)，可避免某些引擎下的文字抖动。',
+        '256px 宽是 Telegram 的实测值，不要随意改动；触屏长按 400–480ms 触发，可配合 vibrate(8) 反馈。',
         '关闭：Esc / 点击菜单外任意处 / 点完一项即静默关闭；关闭后焦点如可回归原触发器更佳。'
       ],
       math: [
@@ -322,7 +334,7 @@ function effectSpecs(): EffectSpec[] {
     {
       id: 'levels',
       title: '三级动画等级系统（位移/淡入 token 分离）',
-      summary: '把“减弱动画”做成三档而不是二开关；2 = 完整、1 = 位移瞬跳但淡入淡出照常、0 = 全关。实现关键是把每条 transition 的时长拆成两个 CSS 变量引用：--dur-x（淡入/颜色）和 --dur-x-move（transform 位移），等级 1 只把 -move 置 0。',
+      summary: '把“减弱动画”做成三档而不是二开关；2 = 完整、1 = 位移瞬跳但淡入淡出照常、0 = 全关。实现关键是把每条 transition 的时长拆成两个 CSS 变量引用：--dur-*（淡入/颜色，如 --dur-send）和 --dur-*-move（transform 位移，如 --dur-incoming-move），等级 1 只把 -move 置 0。',
       tokens: [
         { name: '基础时长', value: num(settings.duration), note: '所有类别的基准' },
         { name: '全局曲线', value: easing.value, note: '类别可逐个覆盖' },
@@ -332,8 +344,8 @@ function effectSpecs(): EffectSpec[] {
         '每条可能位移的 transition 都写成两段：transform 用 var(--dur-x-move)，opacity/color 用 var(--dur-x)。',
         '在 <html> 或根元素挂 data-motion-level="0|1|2"；用 attribute selector 写 token：[data-motion-level="1"] 内 --dur-*-move: 0ms，[data-motion-level="0"] 全部 0ms。',
         '常量【省电/低电量】等外部条件映射为“取 min(用户等级, 环境允许等级)”；UI 需展示生效级别并说明原因。',
-        'prefers-reduced-motion: reduce 默认强制 0 级（给 [data-motion-keep] 单 例逃生口）。',
-        'JS 侧读同 token：getComputedStyle(el).getPropertyValue("--dur-x")，与 CSS 单源；飞行的 duration 判断它决定是否播放。'
+        'prefers-reduced-motion: reduce 默认强制 0 级（留 [data-motion-keep] 作为单例逃生口）。',
+        '时长单源但各有分工：CSS 侧由 token 驱动 transition；需要 WAAPI 的部分（飞行/抛物线/弹跳）在 JS 里用同一份配置算时长后交给 animate()；只有涟漪把 --mk-ripple-duration / --mk-ripple-easing 读回来，做到 CSS/JS 完全同步。'
       ],
       math: [
         '生命周期 token 化：位移 token 与淡入 token 分离，就能用 CSS 单变量切换全局降级语义，不需要碰任何一条 transition'
@@ -347,13 +359,14 @@ function effectSpecs(): EffectSpec[] {
     {
       id: 'scroll',
       title: '滚动锚点补偿（列表变化时视口钉住）',
-      summary: '任何在滚动列表“顶部”插入内容（加载历史、前置插入）会被浏览器视为滚动，而视觉上会跳一下；锚点补偿用一行 scrollTop 差值恢复视口位置。',
+      summary: `任何在滚动列表“顶部”插入内容（加载历史、前置插入）会被浏览器视为滚动，而视觉上会跳一下；锚点补偿用一行 scrollTop 差值恢复视口位置。${m.scrollAnchor ? '' : '（本项目当前已关闭锚点补偿，下面是参照实现，落地时请自行决定是否接管浏览器的原生 scroll anchoring。）'}`,
       tokens: [
         { name: '判定重算阈值', value: '0.5px', note: '差值小于它视为静止' },
-        { name: '锚点选择', value: '视口顶部第一条完整可见行', note: '' }
+        { name: '锚点选择', value: '第一条与可视区相交的行（高度 > 0）', note: '被顶部裁掉一半的行也会入选——宁可锚住残缺行，也不要跳一下' },
+        { name: '锚点补偿开关', value: m.scrollAnchor ? '开启（由本实现接管）' : '关闭（交给浏览器原生 scroll anchoring）', note: '仅本项目有这个开关；移植时按目标项目的策略选' }
       ],
       steps: [
-        '在 DOM 变化前：找视口顶部第一行（getBoundingClientRect().bottom ≥ 视口.top），记下它的标识 + (row.top − 视口.top) 位移。',
+        '在 DOM 变化前：找第一条与可视区相交的行（rect.height > 0 && rect.bottom ≥ 视口.top && rect.top ≤ 视口.bottom），记下它的标识 + (row.top − 视口.top) 位移。',
         'DOM 变化完成后：重新查这行的新位置，recentDelta = 新位移 − 记录位移；把 scroller.scrollTop += recentDelta。',
         '可选：在路由/标签切换/窗口尺寸变化后重新锚定，scrollTop 松散（容器 resize 抖动也顺畅）。',
         '若锚点行已不存在（被替换）则跳过补偿，不防碍。'
@@ -374,7 +387,7 @@ function effectSpecs(): EffectSpec[] {
 const engineering = (framework: Framework, style: ImplStyle): string[] => {
   const notes: string[] = [
     '**只允许动画 transform / opacity**（唯一例外是显式标注了「高度收起」的行为连续性动画），禁止每帧驱动 top/left/width/height 布局属性。',
-    '**所有飞行/粒子/波纹用 Web Animations API（element.animate）**，fill 用 both/forwards；不依赖任何外部库即可运行。' ,
+    '**所有飞行/粒子/波纹用 Web Animations API（element.animate）**，fill 用 both/forwards；不依赖任何外部库即可运行。',
     '**可中断是一级公民**：同一目标的新动画开始前必须取消旧动画并清理其临时 DOM 节点（克隆体/波纹/粒子），不允许两个动画叠加。',
     '**尊重系统偏好**：prefers-reduced-motion: reduce 时所有位移类动画不播放（内容直接落位），淡入淡出也缩短或关闭；不要用 JS 撤销用户系统设置。',
     '**性能自证**：60fps 目标，动画节点加 will-change: transform 且动画结束后必须移除该属性或删除节点；禁止在动画期间读取布局（layout thrash）。',

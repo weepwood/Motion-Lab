@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, type Component } from 'vue'
+import { computed, ref, type Component } from 'vue'
 import {
   ArrowLeft, ArrowLeftRight, Battery, BatteryCharging, ChevronRight, Code2, FlaskConical, Gauge, Heart, Info,
   MessageCircle, Moon, MousePointerClick, Play, Reply, RotateCcw, Send, Settings, Sun, Trash2, Zap
@@ -144,32 +144,32 @@ const effectTarget = ref<EffectId>('send')
 const framework = ref<Framework>('react')
 const implStyle = ref<ImplStyle>('waapi')
 const exportAll = ref(false)
-const promptText = ref('')
+const promptBox = ref<HTMLTextAreaElement | null>(null)
 
 const options = computed(() => ({ framework: framework.value, style: implStyle.value }))
-watch([effectTarget, exportAll, options], () => {
-  promptText.value = exportAll.value
-    ? buildSystemPrompt(options.value)
-    : buildEffectPrompt(effectTarget.value, options.value)
-}, { immediate: true, deep: true })
-// 数值来自实时设置：改了时长/曲线/机制参数，提示词自动跟着变。
-const regenKey = computed(() => JSON.stringify([
-  settings.duration, settings.easing, settings.customBezier, settings.springBounce, settings.timeScale,
-  settings.mech, settings.overrides, settings.animations, settings.animationLevel
-]))
-watch(regenKey, () => {
-  promptText.value = exportAll.value
-    ? buildSystemPrompt(options.value)
-    : buildEffectPrompt(effectTarget.value, options.value)
-})
+/**
+ * 提示词是一份 computed：生成过程中读到的每一个配置量（基础时长、类别覆盖、
+ * 机制参数、动画等级、省电模式、系统「减少动态效果」、电池状态……）都会被
+ * 自动追踪，任何一个变动都会让提示词重算——不用手工维护依赖清单，也就不会
+ * 出现「改了设置但导出的还是旧数值」。
+ */
+const promptText = computed(() => (exportAll.value
+  ? buildSystemPrompt(options.value)
+  : buildEffectPrompt(effectTarget.value, options.value)))
+
 function copyPrompt() {
-  const text = promptText.value
-  void navigator.clipboard?.writeText(text)
-    .then(() => emit('toast', '提示词已复制，粘贴给 AI 即可复刻'), () => {
-      const ta = document.activeElement as HTMLTextAreaElement | null
-      void ta?.select?.()
-      emit('toast', '浏览器拒绝了剪贴板，请全选复制文本框内容')
-    })
+  const write = navigator.clipboard?.writeText(promptText.value)
+  if (!write) {
+    promptBox.value?.focus()
+    promptBox.value?.select()
+    emit('toast', '当前环境没有剪贴板权限，请全选复制文本框内容')
+    return
+  }
+  void write.then(() => emit('toast', '提示词已复制，粘贴给 AI 即可复刻'), () => {
+    promptBox.value?.focus()
+    promptBox.value?.select()
+    emit('toast', '浏览器拒绝了剪贴板，请全选复制文本框内容')
+  })
 }
 function downloadPrompt() {
   const blob = new Blob([promptText.value], { type: 'text/markdown;charset=utf-8' })
@@ -177,8 +177,12 @@ function downloadPrompt() {
   const a = document.createElement('a')
   a.href = url
   a.download = (exportAll.value ? 'motion-lab-ai-system' : 'motion-lab-ai-' + effectTarget.value) + '.md'
+  a.style.display = 'none'
+  document.body.append(a)
   a.click()
-  URL.revokeObjectURL(url)
+  a.remove()
+  // 立即 revoke 会让部分浏览器（Safari / 旧 Firefox）拿不到文件内容
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
   emit('toast', '已下载 .md 文件')
 }
 
@@ -443,7 +447,7 @@ function reset() {
               </div>
               <div class="settings-group">
                 <h3 class="group-caption">复刻提示词 <small>{{ promptText.length }} 字符</small></h3>
-                <textarea class="config-io export-io" readonly :value="promptText" aria-label="AI 复刻提示词"></textarea>
+                <textarea ref="promptBox" class="config-io export-io" readonly :value="promptText" aria-label="AI 复刻提示词"></textarea>
               </div>
             </template>
 
