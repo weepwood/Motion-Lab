@@ -28,7 +28,7 @@ const inspector=ref<'parameters'|'assets'|'export'>('parameters')
 const tabs=[{id:'parameters',label:'参数',icon:SlidersHorizontal},{id:'assets',label:'资产',icon:FolderOpen},{id:'export',label:'导出',icon:Code2}] as const
 watch(config,()=>{pause();seek(Math.min(time.value,total.value))},{deep:true})
 function scrub(ms:number){pause();seek(ms)}
-function selectFrame(offset:number){selected.value=offset;inspector.value='parameters';scrub(offset*config.value.duration)}
+function selectFrame(offset:number){selected.value=offset;rightOpen.value=true;inspector.value='parameters';scrub(offset*config.value.duration)}
 function moveFrame(from:number,to:number){if(!Number.isFinite(to))return;const offset=Math.round(Math.max(.01,Math.min(.99,to))*100)/100;const frame=config.value.frames.find(x=>x.offset===from);if(!frame||config.value.frames.some(x=>x!==frame&&x.offset===offset))return;frame.offset=offset;config.value.frames.sort((a,b)=>a.offset-b.offset);selectFrame(offset)}
 function choose(id:Effect){config.value=defaults(id);activeAsset.value='';stress.value=1;baseline.value=null;selected.value=null;scrub(0)}
 function apply(c:Config){config.value=sanitizeConfig(c);selected.value=null;baseline.value=null;stress.value=1;scrub(0)}

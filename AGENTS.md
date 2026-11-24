@@ -70,3 +70,5 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - 可折叠面板、宽度拖动与键盘调整（宽度持久化），默认界面卡片、新通知场景；移动端可收起面板。
 
 - 共享布局物理模式保存前一动画采样速度，重新捕获几何时承接平移速度；缩放速度仍不继承。物理采样末段平滑收敛，拖拽与共享布局/导出共用质量刚度阻尼配置。手势录制播放生命周期增加代际保护。新增物理中断位置与清理回归。
+
+- #9 Pages 部署 45401351606 成功。新增 SettingsPower、两轮 120 次重复 FLIP / Chromium CDP GC 后 heap 采样、编排与通知截图、手势轨道真实录制回归。版本设为 3.4.0-rc.1（package 与 lock 同步），正式 release 需满足 docs/release-checklist.md；候选暂未发布。
