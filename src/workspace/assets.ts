@@ -23,9 +23,11 @@ export function useAssets() {
   function save(name: string,c: Config,id?: string){
     const revision={at:new Date().toISOString(),config:sanitizeConfig(c)}
     const existing=store.value.assets.find(a=>a.id===id)
-    if(existing){existing.versions=[revision,...existing.versions].slice(0,30);return}
+    if(existing){existing.versions=[revision,...existing.versions].slice(0,30);return existing.id}
     if(store.value.assets.length>=200) throw Error('预设已达上限，请先备份')
-    store.value.assets.push({id:globalThis.crypto?.randomUUID?.()??String(Date.now())+'-'+Math.random(),name:name.trim().slice(0,80)||'未命名预设',versions:[revision]})
+    const asset={id:globalThis.crypto?.randomUUID?.()??String(Date.now())+'-'+Math.random(),name:name.trim().slice(0,80)||'未命名预设',versions:[revision]}
+    store.value.assets.push(asset)
+    return asset.id
   }
   function importText(text:string){if(text.length>2_000_000)throw Error('文件过大');const next=parse(JSON.parse(text));const known=new Set(store.value.assets.map(x=>x.id));const incoming=next.assets.filter(x=>{if(known.has(x.id))return false;known.add(x.id);return true});if(store.value.assets.length+incoming.length>200)throw Error('超出预设上限');store.value={version:1,favorites:[...new Set([...store.value.favorites,...next.favorites])],assets:[...store.value.assets,...incoming]}}
   return {store,error,favorite,save,importText}
