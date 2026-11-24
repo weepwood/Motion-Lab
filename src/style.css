@@ -369,6 +369,7 @@ html.mk-heavy-held .blob { transition-duration: 0s }
 .slider-row.off { opacity: .5 }
 .config-io { display: block; width: calc(100% - 20px); margin: 4px 10px 8px; padding: 8px 10px; border: 0; border-radius: 10px; background: var(--surface-2); color: var(--text); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical }
 .config-io::placeholder { color: var(--muted) }
+.export-io { min-height: 340px; line-height: 1.6; white-space: pre-wrap }
 .group-hint { margin: 6px 12px 8px; color: var(--muted); font-size: 13px; line-height: 1.45 }
 .banner { margin: 8px 10px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-size: 13px; line-height: 1.45 }
 

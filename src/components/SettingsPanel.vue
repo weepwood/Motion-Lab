@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, type Component } from 'vue'
+import { computed, ref, watch, type Component } from 'vue'
 import {
-  ArrowLeft, ArrowLeftRight, Battery, BatteryCharging, ChevronRight, FlaskConical, Gauge, Heart, Info,
+  ArrowLeft, ArrowLeftRight, Battery, BatteryCharging, ChevronRight, Code2, FlaskConical, Gauge, Heart, Info,
   MessageCircle, Moon, MousePointerClick, Play, Reply, RotateCcw, Send, Settings, Sun, Trash2, Zap
 } from 'lucide-vue-next'
 import { vRipple } from '../ripple'
@@ -12,6 +12,10 @@ import {
   type AnimationKey, type AnimationMeta, type DemoKey, type SettingsTab, type ThemeMode
 } from '../settings'
 import { exportSettings, importSettings, motionPresets } from '../presets'
+import {
+  buildEffectPrompt, buildSystemPrompt, exportableEffects, frameworkLabels, styleLabels,
+  type EffectId, type Framework, type ImplStyle
+} from '../aiExport'
 import ToggleRow from './ToggleRow.vue'
 import RadioRow from './RadioRow.vue'
 import RangeSlider from './RangeSlider.vue'
@@ -30,7 +34,7 @@ const emit = defineEmits<{
 const stack = ref<SettingsTab[]>(props.entry && props.entry !== 'main' ? ['main', props.entry] : ['main'])
 const dir = ref<'push' | 'pop'>('push')
 const current = computed<SettingsTab>(() => stack.value[stack.value.length - 1] ?? 'main')
-const titles: Record<SettingsTab, string> = { main: '设置', general: '通用设置', animations: '动画与省电', lab: '动效实验室' }
+const titles: Record<SettingsTab, string> = { main: '设置', general: '通用设置', animations: '动画与省电', lab: '动效实验室', export: 'AI 复刻导出' }
 
 function go(tab: SettingsTab) {
   if (current.value === tab) return
@@ -134,6 +138,50 @@ function doImport() {
   else { configText.value = ''; emit('toast', '配置导入成功') }
 }
 
+/* ---- AI 复刻导出 ---- */
+const effects = exportableEffects()
+const effectTarget = ref<EffectId>('send')
+const framework = ref<Framework>('react')
+const implStyle = ref<ImplStyle>('waapi')
+const exportAll = ref(false)
+const promptText = ref('')
+
+const options = computed(() => ({ framework: framework.value, style: implStyle.value }))
+watch([effectTarget, exportAll, options], () => {
+  promptText.value = exportAll.value
+    ? buildSystemPrompt(options.value)
+    : buildEffectPrompt(effectTarget.value, options.value)
+}, { immediate: true, deep: true })
+// 数值来自实时设置：改了时长/曲线/机制参数，提示词自动跟着变。
+const regenKey = computed(() => JSON.stringify([
+  settings.duration, settings.easing, settings.customBezier, settings.springBounce, settings.timeScale,
+  settings.mech, settings.overrides, settings.animations, settings.animationLevel
+]))
+watch(regenKey, () => {
+  promptText.value = exportAll.value
+    ? buildSystemPrompt(options.value)
+    : buildEffectPrompt(effectTarget.value, options.value)
+})
+function copyPrompt() {
+  const text = promptText.value
+  void navigator.clipboard?.writeText(text)
+    .then(() => emit('toast', '提示词已复制，粘贴给 AI 即可复刻'), () => {
+      const ta = document.activeElement as HTMLTextAreaElement | null
+      void ta?.select?.()
+      emit('toast', '浏览器拒绝了剪贴板，请全选复制文本框内容')
+    })
+}
+function downloadPrompt() {
+  const blob = new Blob([promptText.value], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = (exportAll.value ? 'motion-lab-ai-system' : 'motion-lab-ai-' + effectTarget.value) + '.md'
+  a.click()
+  URL.revokeObjectURL(url)
+  emit('toast', '已下载 .md 文件')
+}
+
 const demos: { key: DemoKey; icon: Component; title: string; desc: string; anim?: AnimationKey }[] = [
   { key: 'send', icon: Send, title: '消息飞入', desc: '输入框 → 气泡（双曲线弧线）', anim: 'send' },
   { key: 'incoming', icon: MessageCircle, title: '收到消息', desc: '正在输入 → 入场', anim: 'incoming' },
@@ -211,6 +259,11 @@ function reset() {
                 <button v-ripple class="row nav-row" @click="go('lab')">
                   <FlaskConical class="row-icon" :size="22" />
                   <span class="row-text"><span class="row-title">动效实验室</span><small>机制参数、演示、慢放、曲线对比</small></span>
+                  <ChevronRight class="row-chevron" :size="18" />
+                </button>
+                <button v-ripple class="row nav-row" @click="go('export')">
+                  <Code2 class="row-icon" :size="22" />
+                  <span class="row-text"><span class="row-title">AI 复刻导出<span class="row-badge">新</span></span><small>把当前手感变成给 AI 的复刻提示词</small></span>
                   <ChevronRight class="row-chevron" :size="18" />
                 </button>
               </div>
@@ -359,6 +412,38 @@ function reset() {
                   <button v-ripple class="chip" @click="doImport">导入</button>
                 </div>
                 <textarea v-model="configText" class="config-io" rows="5" aria-label="配置 JSON" placeholder="导出的配置会显示在这里，也可以粘贴别人的配置后点「导入」"></textarea>
+              </div>
+            </template>
+
+            <!-- ============ AI export ============ -->
+            <template v-else-if="current === 'export'">
+              <div class="settings-group">
+                <h3 class="group-caption">导出什么</h3>
+                <ToggleRow v-model="exportAll" label="导出全套动效系统" desc="打开后一次性导出 12 个效果的完整规范（给 AI 做整套设计系统）" />
+                <div v-if="!exportAll" class="chips" role="radiogroup" aria-label="选择要导出的动效">
+                  <button v-for="e in effects" :key="e.id" v-ripple class="chip" role="radio" :aria-checked="effectTarget === e.id" :class="{ chosen: effectTarget === e.id }" @click="effectTarget = e.id">{{ e.title.split('（')[0] }}</button>
+                </div>
+                <p class="group-hint">
+                  提示词由<b>当前实时配置</b>生成：基础时长、类别覆盖、机制参数（飞行曲线/阻尼/阈值……）都会写进去，
+                  另附加机器可读 JSON 规范。把下面的文本复制或下载后交给任何 AI，即可在其他项目复现这个手感。
+                </p>
+              </div>
+              <div class="settings-group">
+                <h3 class="group-caption">目标环境</h3>
+                <div class="chips" role="radiogroup" aria-label="目标框架">
+                  <button v-for="(label, key) in frameworkLabels" :key="key" v-ripple class="chip" role="radio" :aria-checked="framework === key" :class="{ chosen: framework === key }" @click="framework = key as Framework">{{ label }}</button>
+                </div>
+                <div class="chips" role="radiogroup" aria-label="实现方式">
+                  <button v-for="(label, key) in styleLabels" :key="key" v-ripple class="chip" role="radio" :aria-checked="implStyle === key" :class="{ chosen: implStyle === key }" @click="implStyle = key as ImplStyle">{{ label }}</button>
+                </div>
+                <div class="chips">
+                  <button v-ripple class="chip" @click="copyPrompt">复制提示词</button>
+                  <button v-ripple class="chip" @click="downloadPrompt">下载 .md</button>
+                </div>
+              </div>
+              <div class="settings-group">
+                <h3 class="group-caption">复刻提示词 <small>{{ promptText.length }} 字符</small></h3>
+                <textarea class="config-io export-io" readonly :value="promptText" aria-label="AI 复刻提示词"></textarea>
               </div>
             </template>
 

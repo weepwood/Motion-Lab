@@ -203,6 +203,39 @@ test('mobile: chat list first, chat pushes in and back returns', async ({ page }
   await expect(page.locator('.app-shell')).not.toHaveClass(/mobile-chat-open/)
 })
 
+test('AI export turns the live config into a faithful reproduction prompt', async ({ page }) => {
+  await page.goto('/')
+  await openFromMainMenu(page, '设置')
+  await page.getByRole('button', { name: /AI 复刻导出/ }).click()
+  const out = page.locator('.export-io')
+  // textarea 的正文在 .value 里而非 textContent，统一经 value 断言
+  const promptValue = () => out.evaluate((el: HTMLTextAreaElement) => el.value)
+  const expectPrompt = async (substring: string) => {
+    await expect.poll(async () => (await promptValue()).includes(substring), { timeout: 4000 })
+      .toBe(true)
+  }
+  // 单效果：双曲线飞行的精确数值全部写进提示词
+  await expectPrompt('# 动效复刻任务：消息发送飞行')
+  await expectPrompt('cubic-bezier(0.23, 1, 0.32, 1)')
+  await expectPrompt('cubic-bezier(0.1992, 0.0106, 0.2792, 0.9103)')
+  await expectPrompt('"effect": "send"')
+  // 目标框架切换 → 框架特定要求进入提示词
+  await page.getByRole('radio', { name: /Vue 3/ }).click()
+  await expectPrompt('Vue 特定要求')
+  // 改全局时长 → 提示词自动跟随实时配置
+  await page.getByRole('button', { name: '返回', exact: true }).click()
+  await page.getByRole('button', { name: /动画与省电/ }).click()
+  await page.locator('#duration').fill('500')
+  await page.getByRole('button', { name: '返回', exact: true }).click()
+  await page.getByRole('button', { name: /AI 复刻导出/ }).click()
+  await expectPrompt('基础时长 500 ms')
+  // 全套模式：12 个效果都在
+  await page.getByText('导出全套动效系统', { exact: true }).click()
+  const count = await promptValue().then(v => (v.match(/# 动效复刻任务/g) || []).length)
+  expect(count).toBeGreaterThanOrEqual(12)
+  await expectPrompt('动效系统总览')
+})
+
 test('CI gate: a typical journey produces no console errors', async ({ page }) => {
   const errors: string[] = []
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()) })

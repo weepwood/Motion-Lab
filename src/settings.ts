@@ -8,7 +8,7 @@ export type TimeFormat = '24h' | '12h'
 /** 0 = off, 1 = reduced (displacement skipped, fades kept), 2 = full — mirrors tweb's liteMode levels. */
 export type AnimationLevel = 0 | 1 | 2
 export type AnimationKey = 'send' | 'incoming' | 'chat' | 'sidebar' | 'menu' | 'reaction' | 'particles' | 'wallpaper' | 'themeReveal' | 'ripple'
-export type SettingsTab = 'main' | 'general' | 'animations' | 'lab'
+export type SettingsTab = 'main' | 'general' | 'animations' | 'lab' | 'export'
 export type DemoKey = 'send' | 'incoming' | 'chat' | 'sidebar' | 'menu' | 'reaction' | 'swipe' | 'theme' | 'delete' | 'stress'
 
 /** Per-category override; `null` means "follow the global settings". */
