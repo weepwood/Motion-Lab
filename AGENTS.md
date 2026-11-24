@@ -83,3 +83,5 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - 移动端默认收起两侧，手动展开互斥；聊天菜单定位抽离。候选仍须完整 CI、最新截图/基准、部署验证后才创建正式 Release。
 
 - 收口分支将应用和 lockfile 版本同步为 3.4.0，属于待验证的发布提交；未创建正式 tag/Release。保持独立 motion-kit 的版本不变（未单独发布）。
+
+- 收口复查：独立布局轨道传递稳定对象而非逐帧新数组；组合运行时统一 ResizeObserver 与卸载清理，批量布局写入，物理动画 settle 后释放采样缓存。新增时间轴 seek 不重建 DOM 的回归。

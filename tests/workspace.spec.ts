@@ -313,6 +313,8 @@ test('measured layout tracks and combined project zip',async({page})=>{
  await page.goto('/?workspace=1')
  await page.getByRole('button',{name:'多轨道',exact:true}).click()
  await page.getByRole('button',{name:'新增布局轨道'}).click()
+ const lane=page.locator('[data-composition-stage]');await expect(lane).toBeVisible();await lane.evaluate(el=>el.setAttribute('data-keep','yes'))
+ await page.getByLabel('编排时间轴').fill('160');await expect(lane).toHaveAttribute('data-keep','yes')
  await page.getByRole('button',{name:'新增轨道',exact:true}).click()
  await page.getByLabel('轨道动效').selectOption('shared')
  await page.getByRole('button',{name:'组合预览',exact:true}).click()

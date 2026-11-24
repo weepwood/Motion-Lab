@@ -6,7 +6,7 @@ export function mountComposition(root,tracks){
  stage.dataset.compositionStage=''
  Object.assign(stage.style,{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(180px,100%),1fr))',gap:'10px',width:'100%'})
  root.append(stage)
- let disposed=false,raf=0,animations=[],last=0,time=0
+ let disposed=false,raf=0,resizeRaf=0,animations=[],last=0,time=0,observer,lastWidth=0
  const nodes=[]
  const entries=tracks.map(t=>{
   const lane=document.createElement('section');lane.dataset.compositionTrack=t.id
@@ -29,9 +29,12 @@ export function mountComposition(root,tracks){
    if(t.effect==='shared'){items[0].style.width='36px';items[0].style.height='36px';area.style.justifyContent='flex-start'}
   }
   const measured=entries.map(entry=>({entry,before:['flip','shared'].includes(entry.t.effect)?captureLayout(entry.items):null}))
-  for(const {entry:{t,area,items},before} of measured){
+  // Batch DOM mutations before subsequent geometry reads across the scene.
+  for(const {t,area,items} of entries){
    if(t.effect==='flip')area.append(items[0])
    if(t.effect==='shared'){items[0].style.width='76px';items[0].style.height='64px';area.style.justifyContent='flex-end'}
+  }
+  for(const {entry:{t,items},before} of measured){
    if(reduced()||t.duration<=0)continue
    if(before){
     for(const a of animateLayout(before,{duration:t.duration,easing:t.easing,physics:t.physics})){a.effect?.updateTiming({fill:'both'});a.pause();animations.push({a,delay:t.delay,duration:t.duration})}
@@ -44,7 +47,8 @@ export function mountComposition(root,tracks){
  function seek(ms){time=Math.max(0,Math.min(total,Number.isFinite(ms)?ms:0));for(const {a,delay,duration} of animations)a.currentTime=Math.max(0,Math.min(duration,time-delay))}
  function pause(){cancelAnimationFrame(raf);raf=0}
  function start(){pause();seek(0);if(reduced()){seek(total);return}last=performance.now();const tick=now=>{if(disposed)return;seek(time+now-last);last=now;if(time<total)raf=requestAnimationFrame(tick);else raf=0};raf=requestAnimationFrame(tick)}
- function dispose(){disposed=true;pause();animations.forEach(x=>x.a.cancel());animations=[];cancelLayout(nodes);stage.remove()}
+ function dispose(){if(disposed)return;disposed=true;pause();cancelAnimationFrame(resizeRaf);observer?.disconnect();animations.forEach(x=>x.a.cancel());animations=[];cancelLayout(nodes);stage.remove()}
  prepare()
+ if(typeof ResizeObserver!=='undefined'){lastWidth=root.clientWidth;observer=new ResizeObserver(()=>{if(disposed||root.clientWidth===lastWidth)return;lastWidth=root.clientWidth;cancelAnimationFrame(resizeRaf);resizeRaf=requestAnimationFrame(()=>{if(!disposed)prepare()})});observer.observe(root)}
  return {seek,play:start,pause,dispose,total,refresh:prepare}
 }

@@ -18,7 +18,7 @@ const animate = (el, frames, duration, easing, extra = {}) => {
   const animation = play(el, frames, duration, easing, extra)
   if (animation) {
     running.set(el, animation)
-    void settle(animation).then(() => { if (running.get(el) === animation) running.delete(el) })
+    void settle(animation).then(() => { if (running.get(el) === animation) running.delete(el); if(physicalRuns.get(el)?.animation===animation)physicalRuns.delete(el) })
   }
   return animation
 }
