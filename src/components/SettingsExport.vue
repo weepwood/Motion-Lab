@@ -1,23 +1,27 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { ArrowLeft, Check, ClipboardCopy, Download, FileCode2, ListFilter, Search, X } from 'lucide-vue-next'
+import { ArrowLeft, Check, ClipboardCopy, Download, FileCode2, ListFilter, Search, Settings2, X } from 'lucide-vue-next'
 import { buildEffectPrompt, buildSystemPrompt, exportableEffects, exportEffectDetails, frameworkLabels, styleLabels, type EffectId, type Framework, type ImplStyle } from '../aiExport'
 import {settings,effectiveLevel} from '../settings'
-const emit=defineEmits<{toast:[text:string];close:[]}>()
+const props=defineProps<{mobile?:boolean}>()
+const emit=defineEmits<{toast:[text:string];close:[];settings:[]}>()
 const effectTarget=defineModel<EffectId>('effect',{required:true})
 const framework=defineModel<Framework>('framework',{required:true})
 const implStyle=defineModel<ImplStyle>('style',{required:true})
 const exportAll=defineModel<boolean>('all',{required:true})
 const query=ref(''),view=ref<'prompt'|'details'>('prompt'),promptBox=ref<HTMLTextAreaElement|null>(null),closeButton=ref<HTMLButtonElement|null>(null)
-const copied=ref(false),copyStatus=ref(''), output=ref<HTMLElement|null>(null)
-function jumpToOutput(){output.value?.scrollIntoView({block:'start',behavior:'instant'})}
+const copied=ref(false),copyStatus=ref(''), output=ref<HTMLElement|null>(null), controls=ref<HTMLElement|null>(null)
+const pane=ref<'config'|'result'>('config')
+function showPane(next:'config'|'result'){pane.value=next;void nextTick(()=>{const target=next==='config'?controls.value:output.value;target?.focus({preventScroll:true})})}
+function jumpToOutput(){showPane('result')}
+const category=ref('all')
 const groups: {name:string;ids:EffectId[]}[]=[
  {name:'消息交互',ids:['send','reaction','ripple','swipe','delete','enter']},
  {name:'界面转场',ids:['theme','push','chat','menu']},
  {name:'系统机制',ids:['levels','scroll']}
 ]
 const effects=computed(()=>exportableEffects())
-const filtered=computed(()=>groups.map(group=>({name:group.name,items:effects.value.filter(e=>group.ids.includes(e.id)&&(!query.value.trim()||(e.id+' '+e.title).toLowerCase().includes(query.value.trim().toLowerCase())))})).filter(g=>g.items.length))
+const filtered=computed(()=>groups.filter(group=>category.value==='all'||category.value===group.name).map(group=>({name:group.name,items:effects.value.filter(e=>group.ids.includes(e.id)&&(!query.value.trim()||(e.id+' '+e.title).toLowerCase().includes(query.value.trim().toLowerCase())))})).filter(g=>g.items.length))
 const selected=computed(()=>effects.value.find(e=>e.id===effectTarget.value))
 const options=computed(()=>({framework:framework.value,style:implStyle.value}))
 const promptText=computed(()=>exportAll.value?buildSystemPrompt(options.value):buildEffectPrompt(effectTarget.value,options.value))
@@ -26,13 +30,14 @@ const shortFramework:Record<Framework,string>={react:'React',vue:'Vue 3',svelte:
 const shortStyle:Record<ImplStyle,string>={waapi:'WAAPI + CSS 变量',css:'CSS + 最小 JS','motion-lib':'动效库'}
 const lines=computed(()=>promptText.value.split('\n').length)
 watch(promptText,()=>{copied.value=false;copyStatus.value=''})
+watch([category,query],()=>{const list=controls.value?.querySelector('.ae-effect-list');if(list)list.scrollTop=0})
 onMounted(()=>closeButton.value?.focus())
 async function copyPrompt(){
  try{
   if(!navigator.clipboard?.writeText)throw Error('clipboard unavailable')
   await navigator.clipboard.writeText(promptText.value);copied.value=true;copyStatus.value='已复制完整提示词';emit('toast','提示词已复制')
  }catch{
-  view.value='prompt';await nextTick();promptBox.value?.focus();promptBox.value?.select();copyStatus.value='剪贴板不可用，已选中文本，请手动复制';emit('toast',copyStatus.value)
+  view.value='prompt';pane.value='result';await nextTick();promptBox.value?.focus();promptBox.value?.select();copyStatus.value='剪贴板不可用，已选中文本，请手动复制';emit('toast',copyStatus.value)
  }
 }
 function downloadPrompt(){
@@ -46,8 +51,9 @@ function downloadPrompt(){
   <div class="ae-heading"><span class="ae-icon"><FileCode2 :size="22"/></span><div><p>Motion Lab / 导出</p><h1>AI 复刻导出</h1></div></div>
   <button ref="closeButton" class="ae-button ae-close" aria-label="关闭 AI 复刻导出" @click="emit('close')"><ArrowLeft :size="16"/><span>返回聊天</span></button>
  </header>
- <div class="ae-body">
-  <div class="ae-controls">
+ <nav class="ae-narrow-nav" aria-label="导出工作区导航"><button :aria-pressed="pane==='config'" @click="showPane('config')">导出配置</button><button :aria-pressed="pane==='result'" @click="showPane('result')">生成结果</button></nav>
+ <div class="ae-body" :data-pane="pane">
+  <div ref="controls" class="ae-controls" tabindex="-1">
    <section class="ae-section">
     <h2><span>01</span> 导出范围</h2>
     <div class="ae-mode" role="group" aria-label="导出范围">
@@ -55,6 +61,8 @@ function downloadPrompt(){
     </div>
     <template v-if="!exportAll">
      <label class="ae-search"><Search :size="16"/><input v-model="query" placeholder="搜索动效..." aria-label="搜索导出动效"><button v-if="query" aria-label="清空动效搜索" @click="query=''"><X :size="15"/></button></label>
+     <div class="ae-category" role="group" aria-label="动效分类"><button v-for="item in ['all',...groups.map(g=>g.name)]" :key="item" :aria-pressed="category===item" @click="category=item">{{item==='all'?'全部':item}}</button></div>
+     <p class="ae-selection"><span>当前选择</span><strong>{{selected?.title.split('（')[0]}}</strong></p>
      <div class="ae-effect-list" aria-label="选择要导出的动效">
       <div v-for="group in filtered" :key="group.name" class="ae-group">
        <h3>{{group.name}} <small>{{group.items.length}}</small></h3>
@@ -77,11 +85,12 @@ function downloadPrompt(){
    <section class="ae-section ae-live">
     <h2><span>03</span> 当前配置 <small>实时同步</small></h2>
     <dl><div><dt>基础时长</dt><dd>{{settings.duration}} ms</dd></div><div><dt>有效动画等级</dt><dd>{{effectiveLevel}}</dd></div><div><dt>慢放倍数</dt><dd>{{settings.timeScale}}×</dd></div></dl>
-    <p class="ae-help">左侧调整动画设置，右侧参数与提示词立即更新。</p>
+    <button v-if="!props.mobile" class="ae-button ae-settings" @click="emit('settings')"><Settings2 :size="15"/> 调整左侧动画设置</button>
+    <p class="ae-help">{{props.mobile?'返回聊天后可在动画设置中调整参数，重新打开导出时会保留选择。':'左侧设置与右侧生成结果实时同步。'}}</p>
    </section>
    <button class="ae-button ae-jump" @click="jumpToOutput">查看生成结果</button>
   </div>
-  <div ref="output" class="ae-output">
+  <div ref="output" class="ae-output" tabindex="-1">
    <div class="ae-output-heading"><div><p class="ae-kicker">生成结果 · {{shortFramework[framework]}}</p><h2>{{exportAll?'全套动效系统':selected?.title}}</h2><p class="ae-muted">{{exportAll?effects.length+' 个效果':'单个动效'}} · {{promptText.length.toLocaleString()}} 字符 · {{lines}} 行</p></div></div>
    <div class="ae-output-toolbar">
     <div class="ae-tabs" role="group" aria-label="输出视图"><button :aria-pressed="view==='prompt'" @click="view='prompt'"><FileCode2 :size="15"/> 提示词</button><button :aria-pressed="view==='details'" @click="view='details'"><ListFilter :size="15"/> 参数概览</button></div>
