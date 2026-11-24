@@ -40,7 +40,7 @@ import './lib/motion/tokens.css'
 const detach = attachRipple(document.querySelector('.btn'))
 
 // 2. 表情/节点抛物线飞行（落点 75% 时刻提前显影）
-await flyParabola({ source: '🔥', target: chipEl, container: rootEl, reveal: () => chipEl.classList.add('on') })
+await flyParabola({ source: '🔥', from: buttonEl, target: chipEl, container: rootEl, reveal: () => chipEl.classList.add('on') })
 
 // 3. 双曲线快照飞行（X 快出 / Y 缓升 → 弧线，落位交叉淡出）
 await flyClone({ source: cardEl, target: slotEl, container: rootEl, reveal: () => realEl.hidden = false })

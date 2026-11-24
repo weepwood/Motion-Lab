@@ -27,7 +27,7 @@ export function createScrollSaver(scroller, rowSelector = '.mk-anchor-row', keyA
       const rect = row.getBoundingClientRect()
       if (rect.height > 0 && rect.bottom >= box.top && rect.top <= box.bottom) {
         const key = row.getAttribute(keyAttr)
-        return { key, offset: rect.top - box.top }
+        if (key) return { key, offset: rect.top - box.top }
       }
     }
     return null
@@ -36,13 +36,12 @@ export function createScrollSaver(scroller, rowSelector = '.mk-anchor-row', keyA
   return {
     save() {
       const el = get()
-      if (!el) return
-      anchor = findVisibleRow(el)
+      anchor = el ? findVisibleRow(el) : null
     },
     restore() {
       const el = get()
       if (!el || !anchor?.key) { anchor = null; return }
-      const row = el.querySelector(`[${keyAttr}="${anchor.key}"]`)
+      const row = Array.from(el.querySelectorAll(rowSelector)).find(candidate => candidate.getAttribute(keyAttr) === anchor.key)
       const had = anchor
       anchor = null
       if (!row) return

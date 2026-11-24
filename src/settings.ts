@@ -166,8 +166,8 @@ function sanitizeOverride(v: unknown): CategoryOverride {
   const d: CategoryOverride = { duration: null, easing: null }
   if (!isObject(v)) return d
   return {
-    duration: v.duration === null ? null : num(v.duration, 0, 1000, d.duration ?? 0) || null,
-    easing: v.easing === null ? null : pick(v.easing, easingOrder, 'telegram')
+    duration: typeof v.duration === 'number' && Number.isFinite(v.duration) ? clamp(v.duration, 0, 1000) : null,
+    easing: typeof v.easing === 'string' && (easingOrder as readonly string[]).includes(v.easing) ? v.easing as EasingKey : null
   }
 }
 
@@ -278,6 +278,7 @@ export function watchEnvironment(): () => void {
   motion.addEventListener('change', sync)
   scheme.addEventListener('change', sync)
   let batteryRef: BatteryLike | null = null
+  let disposed = false
   const syncBattery = () => {
     if (!batteryRef) return
     battery.level = batteryRef.level
@@ -285,15 +286,17 @@ export function watchEnvironment(): () => void {
   }
   const nav = navigator as Navigator & { getBattery?: () => Promise<BatteryLike> }
   nav.getBattery?.().then(b => {
+    if (disposed) return
     batteryRef = b
     battery.supported = true
     syncBattery()
     b.addEventListener('levelchange', syncBattery)
     b.addEventListener('chargingchange', syncBattery)
-  }).catch(() => { battery.supported = false })
+  }).catch(() => { if (!disposed) battery.supported = false })
   const onHide = () => persistNow()
   window.addEventListener('pagehide', onHide)
   return () => {
+    disposed = true
     motion.removeEventListener('change', sync)
     scheme.removeEventListener('change', sync)
     batteryRef?.removeEventListener('levelchange', syncBattery)

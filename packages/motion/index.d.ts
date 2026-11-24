@@ -41,7 +41,7 @@ export type RectLike = Element | DOMRect | { left: number; top: number; width: n
 
 export declare function flyClone(opts: {
   source: Element & { getBoundingClientRect(): DOMRect }
-  from?: Element | DOMRect
+  from?: RectLike
   target: RectLike
   container: Element
   duration?: number
@@ -56,7 +56,7 @@ export declare function flyClone(opts: {
 
 export declare function flyParabola(opts: {
   source: Element | string
-  from?: Element | DOMRect
+  from?: RectLike
   target: RectLike
   container: Element
   duration?: number
@@ -102,5 +102,5 @@ export declare function revealFrom(opts: {
   y?: number
   duration?: number
   easing?: string
-  apply: () => void
+  apply: () => void | Promise<void>
 }): Promise<void>

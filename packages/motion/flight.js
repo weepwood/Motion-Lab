@@ -56,7 +56,7 @@ export async function flyClone({
 }) {
   const startRect = rectOf(from)
   const to = rectOf(target)
-  if (duration <= 0 || to.width <= 0 || to.height <= 0) return
+  if (duration <= 0 || !startRect || !to || to.width <= 0 || to.height <= 0) { reveal?.(); return }
   const claim = claimAnimation(key)
   const wrapper = document.createElement('div')
   wrapper.className = ('mk-flight ' + className).trim()
@@ -70,35 +70,34 @@ export async function flyClone({
   // The ghost keeps its look only if the wrapper inherits the same cascade.
   wrapper.append(ghost)
   container.append(wrapper)
-  let settled = null
-  void claim.cancelled.then(() => { wrapper.remove(); claim.done() })
+  const active = []
+  const track = animation => { if (animation) active.push(animation); return animation }
+  const cleanup = () => { active.forEach(animation => animation.cancel()); wrapper.remove() }
+  void claim.cancelled.then(cleanup)
 
   const dx = startRect.left - to.left
   const dy = startRect.top + startRect.height / 2 - (to.top + to.height / 2)
   const scale = clamp(startRect.height / Math.max(to.height, 1), 0.82, 1)
   const run = (async () => {
     const animations = [
-      play(wrapper, [
+      track(play(wrapper, [
         { transform: `translate3d(${dx}px,0,0)` },
         { transform: 'translate3d(0,0,0)' }
-      ], duration, bezierCss(curveX), { fill: 'both' }),
-      play(ghost, [
+      ], duration, bezierCss(curveX), { fill: 'both' })),
+      track(play(ghost, [
         { transform: `translate3d(0,${dy}px,0) scale(${scale})`, opacity: 0.4 },
         { transform: 'translate3d(0,0,0) scale(1)', opacity: 1 }
-      ], duration, bezierCss(curveY), { fill: 'both' })
+      ], duration, bezierCss(curveY), { fill: 'both' }))
     ]
     await Promise.all(animations.map(settle))
     if (claim.isCancelled()) return
     reveal?.()
     if (landFade > 0) {
-      await settle(play(ghost, [{ opacity: 1 }, { opacity: 0 }], landFade, 'ease-out', { fill: 'forwards' }))
+      await settle(track(play(ghost, [{ opacity: 1 }, { opacity: 0 }], landFade, 'ease-out', { fill: 'forwards' })))
     }
   })()
-  if (hold) holdHeavyAnimations(run.then(() => {}, () => {}))
-  await run
-  if (claim.isCancelled()) return
-  wrapper.remove()
-  claim.done()
+  if (hold) holdHeavyAnimations(run, duration + landFade + 1000)
+  try { await run } finally { cleanup(); claim.done() }
 }
 
 /**
@@ -127,9 +126,9 @@ export async function flyParabola({
   elevation = 30, landing = 0.75, scaleStart = 1.6, key = target,
   reveal = null, className = '', hold = true
 }) {
-  if (duration <= 0) return
   const startRect = rectOf(from)
   const to = rectOf(target)
+  if (duration <= 0 || !startRect || !to || !Number.isFinite(startRect.left)) { reveal?.(); return }
   const claim = claimAnimation(key)
   const inline = typeof source === 'string' || source instanceof String
   const node = inline
@@ -142,8 +141,11 @@ export async function flyParabola({
     pointerEvents: 'none', willChange: 'transform', zIndex: '60'
   })
   container.append(node)
-  const revealTimer = setTimeout(() => { if (!claim.isCancelled()) reveal?.() }, Math.round(duration * landing))
-  void claim.cancelled.then(() => { clearTimeout(revealTimer); node.remove(); claim.done() })
+  let revealed = false
+  const revealOnce = () => {
+    if (!revealed && !claim.isCancelled()) { revealed = true; reveal?.() }
+  }
+  const revealTimer = setTimeout(revealOnce, Math.round(duration * clamp(landing, 0, 1)))
 
   const dx = startRect.left + startRect.width / 2 - (to.left + to.width / 2)
   const dy0 = startRect.top + startRect.height / 2 - (to.top + to.height / 2)
@@ -157,16 +159,14 @@ export async function flyParabola({
     const t = i / stops
     const y = dy0 + b * t + a * t * t
     const scale = scaleStart + (1 - scaleStart) * t
-    frames.push({ transform: `translate(-50%,-50%) translate3d(${(dx * t).toFixed(2)}px,${y.toFixed(2)}px,0) scale(${scale.toFixed(3)})` })
+    frames.push({ transform: `translate(-50%,-50%) translate3d(${(dx * (1 - t)).toFixed(2)}px,${y.toFixed(2)}px,0) scale(${scale.toFixed(3)})` })
   }
-  const run = (async () => {
-    await settle(play(node, frames, duration, 'linear', { fill: 'both' }))
-  })()
-  if (hold) holdHeavyAnimations(run.then(() => {}, () => {}))
-  await run
-  clearTimeout(revealTimer)
-  node.remove()
-  claim.done()
+  const animation = play(node, frames, duration, 'linear', { fill: 'both' })
+  const cleanup = () => { clearTimeout(revealTimer); animation?.cancel(); node.remove() }
+  void claim.cancelled.then(cleanup)
+  const run = settle(animation)
+  if (hold) holdHeavyAnimations(run, duration + 1000)
+  try { await run; revealOnce() } finally { cleanup(); claim.done() }
 }
 
 /**
@@ -178,7 +178,7 @@ export async function flyParabola({
  * @param {string} [className='mk-particle']  class for the particles (styling/sizing)
  */
 export function burstParticles(emoji, at, container, duration = 480, className = 'mk-particle') {
-  if (duration <= 0) return
+  if (duration <= 0) return Promise.resolve()
   const count = 7
   let done = null
   let pending = count
@@ -202,6 +202,6 @@ export function burstParticles(emoji, at, container, duration = 480, className =
     ], duration, 'cubic-bezier(.2,.8,.2,1)', { fill: 'both' })
     void settle(anim).then(() => { p.remove(); bump() })
   }
-  holdHeavyAnimations(run)
+  holdHeavyAnimations(run, duration + 1000)
   return run
 }

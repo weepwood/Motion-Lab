@@ -107,3 +107,7 @@ scripts/                       check-package.mjs（包导入烟雾）/ deploy-de
 ## 许可
 
 MIT License。若将来直接移植 tweb 的代码，请遵守其 GPL-3.0 许可。
+
+## 维护与交接
+
+开发约束、测试入口、当前修复范围及后续路线见 [`AGENTS.md`](AGENTS.md)。内核几何、指针取消、主题揭示和配置迁移需要专项回归测试。

@@ -108,8 +108,15 @@ export function holdHeavyAnimations(promise, timeout = 2000) {
     heavyCount = Math.max(0, heavyCount - 1)
     if (heavyCount === 0) document.documentElement.classList.remove('mk-heavy-held')
   }
-  const safety = new Promise(resolve => setTimeout(resolve, timeout))
-  Promise.race([promise, safety]).then(done, done)
+  let released = false
+  const release = () => {
+    if (released) return
+    released = true
+    clearTimeout(timer)
+    done()
+  }
+  const timer = setTimeout(release, timeout)
+  Promise.resolve(promise).then(release, release)
 }
 
 /** Is a heavy animation currently holding decorative rendering? */
