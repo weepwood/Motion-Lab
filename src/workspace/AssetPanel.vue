@@ -9,7 +9,7 @@ const visible=computed(()=>props.assets.filter(a=>Boolean(a.deletedAt)===trash.v
 watch([trash,query],()=>{selected.value=[];confirmPurge.value=false})
 watch(()=>props.assets,()=>{selected.value=selected.value.filter(id=>visible.value.some(a=>a.id===id))},{deep:true})
 watch(()=>props.active,id=>{const a=props.assets.find(x=>x.id===id);if(a)name.value=a.name})
-function toggle(id:string){selected.value=selected.value.includes(id)?selected.value.filter(x=>x!==id):[...selected.value,id]}
+function toggle(id:string){confirmPurge.value=false;selected.value=selected.value.includes(id)?selected.value.filter(x=>x!==id):[...selected.value,id]}
 function archive(){emit('archive',[...selected.value],trash.value);selected.value=[]}
 function purge(){if(!confirmPurge.value){confirmPurge.value=true;return}emit('purge',[...selected.value]);selected.value=[];confirmPurge.value=false}
 </script>

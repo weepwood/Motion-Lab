@@ -42,3 +42,5 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 ## 专业工具增强批次（依赖 PR #7）
 - 拖动关键帧、手势录制与单次回放、资产重命名/软删除/恢复/批量、同类型版本 A/B、物理弹簧采样、独立 HTML 导出；新增 AssetPanel 拆分。
 - HTML 内联 ESM 依赖源码，需实际运行验证；Vue/React 独立项目构建与 ZIP 包仍待完成。截图由 CI 采集，不等于人工视觉验收；性能指标是 rAF 估算而非 GPU/内存基准。保留旧存储键与已有资产。
+
+- PR #7 首次 CI 42 通过、1 失败：Firefox CSS 序列化差异。改用 DOMMatrixReadOnly.m41 数值断言，并同步到本分支。截图 artifact 总是上传；新增独立 HTML 实际运行回归。

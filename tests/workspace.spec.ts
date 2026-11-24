@@ -75,13 +75,13 @@ test('generated JavaScript layout and drag can mount, interact and dispose',asyn
       const el=root.querySelector<HTMLElement>('[data-motion-item]')!
       const evt=(type:string,x:number)=>el.dispatchEvent(new PointerEvent(type,{pointerId:1,isPrimary:true,button:0,clientX:x,clientY:10}))
       evt('pointerdown',10);evt('pointermove',70)
-      const moved=el.style.transform
+      const moved=new DOMMatrixReadOnly(getComputedStyle(el).transform).m41
       evt('pointerup',70)
       drag.dispose()
       return {before,after,flipClean,moved,dragClean:root.children.length===0}
     }finally{root.remove()}
   },{flipCode,dragCode})
-  expect(result).toEqual({before:'1',after:'2',flipClean:true,moved:'translate(60px, 0px)',dragClean:true})
+  expect(result).toEqual({before:'1',after:'2',flipClean:true,moved:60,dragClean:true})
 })
 
 test('assets can rename, archive and restore without losing revisions',async({page})=>{
@@ -117,4 +117,19 @@ test('visual evidence and interactive pressure cleanup',async({page,browserName}
   await page.setViewportSize({width:390,height:844})
   await page.screenshot({path:testInfo.outputPath(browserName+'-mobile.png'),fullPage:true})
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy()
+})
+
+test('standalone HTML layout works without external modules',async({page})=>{
+  await page.goto('/?workspace=1')
+  await page.getByRole('button',{name:'FLIP 列表重排',exact:true}).click()
+  await page.getByRole('button',{name:'导出',exact:true}).click()
+  const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'独立 HTML',exact:true}).click()])
+  const path=await download.path()
+  const {readFile}=await import('node:fs/promises')
+  const html=await readFile(path,'utf8')
+  await page.setContent(html)
+  const items=page.locator('[data-motion-item]')
+  await expect(items.first()).toHaveText('1')
+  await page.getByRole('button',{name:'运行布局转场'}).click()
+  await expect(items.first()).toHaveText('2')
 })

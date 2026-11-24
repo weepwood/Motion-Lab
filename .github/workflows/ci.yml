@@ -31,6 +31,13 @@ jobs:
             playwright-report/
             test-results/
           if-no-files-found: ignore
+      - name: Upload visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-screenshots
+          path: test-results/**/*.png
+          if-no-files-found: ignore
       - name: Upload production bundle
         uses: actions/upload-artifact@v4
         with:

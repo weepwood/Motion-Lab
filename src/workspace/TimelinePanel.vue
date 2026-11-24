@@ -5,7 +5,7 @@ import { isTimeline, type Config } from './model'
 const props=defineProps<{config:Config;baseline:Config|null;time:number;total:number;playing:boolean;speed:number;loop:boolean;selected:number|null}>()
 const emit=defineEmits<{seek:[number];toggle:[];speed:[number];loop:[boolean];select:[number];move:[number,number]}>()
 const dragging=ref<{offset:number;preview:number;id:number;left:number;width:number}|null>(null)
-function startDrag(e:PointerEvent,offset:number){if(e.button!==0||!props.config.duration)return;const el=e.currentTarget as HTMLElement;const r=el.parentElement!.getBoundingClientRect();dragging.value={offset,preview:offset,id:e.pointerId,left:r.left,width:r.width};el.setPointerCapture(e.pointerId);emit('select',offset)}
+function startDrag(e:PointerEvent,offset:number){if(e.button!==0||!props.config.duration)return;const el=e.currentTarget as HTMLElement;const r=el.parentElement!.getBoundingClientRect();dragging.value={offset,preview:offset,id:e.pointerId,left:r.left,width:r.width};try{el.setPointerCapture(e.pointerId)}catch{/* synthetic pointer */}emit('select',offset)}
 function dragMarker(e:PointerEvent){const d=dragging.value;if(!d||d.id!==e.pointerId||!d.width)return;d.preview=Math.round(Math.max(.01,Math.min(.99,(e.clientX-d.left)/d.width*props.total/props.config.duration))*100)/100}
 function finishDrag(e:PointerEvent,commit:boolean){const d=dragging.value;if(!d||d.id!==e.pointerId)return;dragging.value=null;if(commit&&d.preview!==d.offset)emit('move',d.offset,d.preview)}
 const markerOffset=(offset:number)=>dragging.value?.offset===offset?dragging.value.preview:offset
