@@ -6,7 +6,8 @@ import {
   Smile, Sparkles, Trash2, X, Zap
 } from 'lucide-vue-next'
 import { vRipple } from './ripple'
-import { createChatData, MIN, PAGE, type Message, type Chat } from './chat/data'
+import { createChatData, PAGE, type Message, type Chat } from './chat/data'
+import { buildRows, dayDiff } from './chat/rows'
 import { createReplySwipe } from './chat/replySwipe'
 import { burst, cancelFlight, flyBubble, flyEmoji, revealFrom, play, settle } from './motion'
 import { createScrollSaver } from '../packages/motion/index.js'
@@ -113,19 +114,6 @@ const timeFmt = computed(() => settings.timeFormat === '12h'
   ? new Intl.DateTimeFormat('zh-CN', { hour: 'numeric', minute: '2-digit', hour12: true })
   : new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }))
 const fmtTime = (at: number) => timeFmt.value.format(at)
-const dayKey = (at: number) => new Date(at).toDateString()
-function dayDiff(at: number) {
-  const a = new Date(at); a.setHours(0, 0, 0, 0)
-  const b = new Date(); b.setHours(0, 0, 0, 0)
-  return Math.round((b.getTime() - a.getTime()) / 86_400_000)
-}
-function dayLabel(at: number) {
-  const diff = dayDiff(at)
-  if (diff === 0) return '今天'
-  if (diff === 1) return '昨天'
-  const d = new Date(at)
-  return `${d.getMonth() + 1}月${d.getDate()}日`
-}
 function listTime(at: number) {
   const diff = dayDiff(at)
   if (diff === 0) return fmtTime(at)
@@ -135,27 +123,7 @@ function listTime(at: number) {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
-type Row =
-  | { kind: 'day'; key: string; label: string }
-  | { kind: 'msg'; key: number; m: Message; start: boolean; end: boolean }
-const rows = computed<Row[]>(() => {
-  const list = visibleMessages.value
-  const out: Row[] = []
-  let prevDay = ''
-  list.forEach((m, i) => {
-    const day = dayKey(m.at)
-    if (day !== prevDay) {
-      out.push({ kind: 'day', key: 'day-' + day, label: dayLabel(m.at) })
-      prevDay = day
-    }
-    const prev = list[i - 1]
-    const next = list[i + 1]
-    const start = !prev || prev.mine !== m.mine || dayKey(prev.at) !== day || m.at - prev.at > 5 * MIN
-    const end = !next || next.mine !== m.mine || dayKey(next.at) !== day || next.at - m.at > 5 * MIN
-    out.push({ kind: 'msg', key: m.id, m, start, end })
-  })
-  return out
-})
+const rows = computed(() => buildRows(visibleMessages.value))
 
 const status = computed(() => {
   const c = activeChat.value

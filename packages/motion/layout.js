@@ -16,6 +16,8 @@ export function captureLayout(elements) {
 }
 export function animateLayout(before, { duration = 320, easing = 'cubic-bezier(.23,1,.32,1)' } = {}) {
   const entries = [...before].filter(([el]) => el.isConnected)
+  // Capture visual positions before callers mutate; cancel old transforms before measuring the new layout.
+  for (const [el] of entries) running.get(el)?.cancel()
   const after = entries.map(([el, rect]) => [el, rect, el.getBoundingClientRect()])
   return after.flatMap(([el, first, last]) => {
     if (!last.width || !last.height) return []
