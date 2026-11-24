@@ -6,7 +6,7 @@
  */
 const mods = [
   'engine.js', 'easing.js', 'flight.js', 'ripple.js', 'gestures.js',
-  'scroll-saver.js', 'reveal.js', 'index.js'
+  'scroll-saver.js', 'reveal.js', 'layout.js', 'index.js'
 ]
 for (const mod of mods) {
   const imported = await import(`../packages/motion/${mod}`).catch(error => {

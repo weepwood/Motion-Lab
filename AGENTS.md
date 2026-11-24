@@ -24,3 +24,10 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 3. 增加可保存的参数方案、A/B 对比、独立代码与 CSS token 导出。
 4. 增加 Firefox/WebKit 专项验证、键盘可操作性及性能诊断；实测后优化，不编造 FPS。
 每批更新本文件及 CHANGELOG，记录已验证范围、遗留问题和 PR 状态。
+
+## 工作台集中开发批次（PR #5 已合并，31/31 通过）
+- 入口：/?workspace=1，原 / 聊天和 /demo/ 保留；新资产键 motion-lab-workspace-v1，不覆盖旧设置。
+- src/workspace：model（目录、配置、关键帧）、assets（版本与合并导入）、export（代码生成）、usePlayback（播放时间）、Preview / Workspace（界面）。src/chat：聊天样本数据和共享滑动指令；SettingsExport 独立组件。
+- packages/motion/layout.js：FLIP、共享元素几何、弹簧采样、级联与取消。浏览器回归：Chromium 完整套件，Firefox/WebKit 工作台专项。
+- 外部风格为基于公开设计原则的自定义参数，非官方精确复刻。来源见工作台链接。
+- 已知边界：布局和拖拽依赖真实 DOM，暂不支持完整时间轴/静态代码导出；跨浏览器测试以 CI 为准，尚未发布。后续继续拆分原聊天和设置其他分组、完善导出及实际视觉验收。
