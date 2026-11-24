@@ -1,0 +1,1 @@
+export function menuPosition(id:number,x:number,y:number,width=innerWidth,height=innerHeight){const pad=8,w=256,h=232;const left=Math.max(pad,Math.min(x+w+pad>width?x-w:x,width-w-pad)),top=Math.max(pad,Math.min(y+h+pad>height?y-h:y,height-h-pad));const ox=Math.min(Math.max(0,x-left),w),oy=Math.min(Math.max(0,y-top),h);return {id,x:left,y:top,origin:ox+'px '+oy+'px'}}

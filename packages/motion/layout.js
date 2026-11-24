@@ -8,7 +8,8 @@ function velocityAt(el){
  const t=Number(run.animation.currentTime)||0, step=run.duration/(run.xs.length-1)
  if(step<=0)return undefined
  const i=Math.min(run.xs.length-2,Math.max(0,Math.floor(t/step)))
- return [(run.xs[i+1].value-run.xs[i].value)*1000/step,(run.ys[i+1].value-run.ys[i].value)*1000/step]
+ const rate=frames=>(frames[i+1].value-frames[i].value)*1000/step
+ return [rate(run.xs),rate(run.ys),rate(run.scalesX)*run.width,rate(run.scalesY)*run.height]
 }
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 const animate = (el, frames, duration, easing, extra = {}) => {
@@ -24,7 +25,10 @@ const animate = (el, frames, duration, easing, extra = {}) => {
 export function captureLayout(elements) {
   const list=Array.from(elements)
   const rects=new Map(list.map(el=>[el,el.getBoundingClientRect()]))
-  captureVelocities.set(rects,new Map(list.map(el=>[el,velocityAt(el)])))
+  // Only physical animations need a velocity snapshot. Ordinary FLIP avoids per-element allocations.
+  let velocities
+  for(const el of list){if(!physicalRuns.has(el))continue;const v=velocityAt(el);if(v){velocities??=new Map();velocities.set(el,v)}}
+  if(velocities)captureVelocities.set(rects,velocities)
   return rects
 }
 export function animateLayout(before, { duration = 320, easing = 'cubic-bezier(.23,1,.32,1)', physics } = {}) {
@@ -39,10 +43,10 @@ export function animateLayout(before, { duration = 320, easing = 'cubic-bezier(.
     if(physics&&duration>0){
       const prior=captureVelocities.get(before)?.get(el)
       const opts={...physics,duration},xs=physicalSpringFrames(x,0,{...opts,velocity:prior?.[0]??physics.velocity??0}),ys=physicalSpringFrames(y,0,{...opts,velocity:prior?.[1]??0})
-      const scalesX=physicalSpringFrames(sx,1,{...opts,velocity:0}),scalesY=physicalSpringFrames(sy,1,{...opts,velocity:0})
+      const scalesX=physicalSpringFrames(sx,1,{...opts,velocity:(prior?.[2]??0)/last.width}),scalesY=physicalSpringFrames(sy,1,{...opts,velocity:(prior?.[3]??0)/last.height})
       const frames=xs.map((v,i)=>({offset:v.offset,transformOrigin:'0 0',transform:'translate('+v.value+'px,'+ys[i].value+'px) scale('+Math.max(.01,scalesX[i].value)+','+Math.max(.01,scalesY[i].value)+')'}))
       const anim=animate(el,frames,duration,'linear')
-      if(anim)physicalRuns.set(el,{animation:anim,xs,ys,duration})
+      if(anim)physicalRuns.set(el,{animation:anim,xs,ys,scalesX,scalesY,width:last.width,height:last.height,duration})
       return anim?[anim]:[]
     }
     physicalRuns.delete(el)
@@ -52,7 +56,7 @@ export function animateLayout(before, { duration = 320, easing = 'cubic-bezier(.
 }
 export function sharedElement(source, target, options) {
   const rects=new Map([[target,source.getBoundingClientRect()]])
-  captureVelocities.set(rects,new Map([[target,velocityAt(source)]]))
+  const velocity=velocityAt(source);if(velocity)captureVelocities.set(rects,new Map([[target,velocity]]))
   return animateLayout(rects, options)
 }
 export function springFrames(from, to, bounce = .3, samples = 48) {

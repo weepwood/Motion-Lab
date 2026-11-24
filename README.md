@@ -126,3 +126,5 @@ MIT License。若将来直接移植 tweb 的代码，请遵守其 GPL-3.0 许可
 编排工程支持 JSON 合并导入/导出、离线 HTML、分组同步位移、独立关键帧及录制手势轨道。原轨道不覆盖，实时布局轨道暂不支持。
 
 3.4.0-rc.1 候选验收见 [发布检查清单](docs/release-checklist.md)，正式版本需通过完整 CI 和 Pages 验收。
+
+编排支持内置实时测量 FLIP 与共享元素布局、组合预览及 HTML/Vue/React/ZIP 输出。外部任意 DOM 绑定不在本版本范围内。正式版本以 GitHub Release 和成功部署为准。

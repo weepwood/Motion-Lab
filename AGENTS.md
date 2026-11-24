@@ -78,3 +78,6 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 ## V3.4.0 收口批次
 - #10 最新 CI 79/79、Vue/React 16 构建及运行、ZIP 22 条 CRC 全通过，合并提交 209df64。首轮截图 12 张，移动端仍偏长。30 次 FLIP P95 17.1/22/27 ms；两轮 120 次 P95 Chromium 17.8/18.0、Firefox 19/20、WebKit 19/17 ms，残留 0。Chromium GC 后 usedSize 4984408→5050792→5006920 字节；差异受运行器负载影响，不证明无泄漏。
 - 编排增加实时测量的内置 FLIP/共享元素场景与同一播放时钟的组合预览；mountComposition 被工作台与整体 HTML/Vue/React/ZIP 共用。不是任意外部 DOM 编排器。原 v1 存储兼容。
+
+- 物理 FLIP 继承实际像素宽高变化速度并按新目标几何归一化；普通 FLIP 仅对有效物理动画采集速度以减少额外分配。新增连续中断宽高/位置、移动端默认聚焦及实际组合工程构建运行门禁。
+- 移动端默认收起两侧，手动展开互斥；聊天菜单定位抽离。候选仍须完整 CI、最新截图/基准、部署验证后才创建正式 Release。
