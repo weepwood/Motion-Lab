@@ -429,7 +429,7 @@ input:checked + .radio::after { transform: scale(1) }
 .chip.chosen { background: var(--accent); color: var(--on-accent) }
 
 .curve-editor { margin: 0 10px; padding: 10px 12px 12px; border-radius: 14px; background: var(--surface-2) }
-.curve-editor svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: none; user-select: none }
+.curve-editor > svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: none; user-select: none }
 .curve-editor .grid { stroke: var(--border); stroke-width: 1 }
 .curve-editor .diagonal { stroke: var(--muted); stroke-dasharray: 3 5; opacity: .6 }
 .curve-editor .cursor { stroke: var(--accent); opacity: .25 }
@@ -516,3 +516,8 @@ input:checked + .radio::after { transform: scale(1) }
 @media(max-width:720px){.workspace.export-open .sidebar{visibility:hidden;pointer-events:none}.ai-export-workspace{position:absolute;inset:0;z-index:6;width:100%;height:100%}.conversation-head .ai-export-entry{display:none}}
 
 .ae-jump{display:none}@container(max-width:760px){.ae-jump{display:inline-flex;grid-column:1/-1;justify-self:end}}@container(max-width:460px){.ae-jump{width:100%}}
+
+/* Keep common export settings within reach and make narrow screens two distinct panes. */
+.ae-effect-list{max-height:clamp(130px,25vh,230px);overflow-y:auto;overscroll-behavior:contain;border:1px solid var(--border);border-radius:8px;padding:6px;scrollbar-width:thin;gap:8px}.ae-effect{min-height:30px;padding:4px 6px}.ae-category{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}.ae-category button{font-size:11px;line-height:1.4;border-radius:5px;padding:5px 7px;background:var(--surface-2);color:var(--muted)}.ae-category button[aria-pressed=true]{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent)}.ae-selection{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;margin:8px 0;color:var(--muted)}.ae-selection strong{color:var(--text);font-size:12px;text-align:right;overflow-wrap:anywhere}.ae-settings{width:100%;margin-top:12px}.ae-narrow-nav{display:none}.ae-controls:focus,.ae-output:focus{outline:none}
+@container(max-width:760px){.ae-narrow-nav{display:flex;flex:none;gap:4px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--surface)}.ae-narrow-nav button{flex:1;padding:8px;border-radius:6px;font-size:13px;color:var(--muted)}.ae-narrow-nav button[aria-pressed=true]{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}.ae-body{display:flex;flex-direction:column;overflow:hidden}.ae-body[data-pane=config] .ae-output,.ae-body[data-pane=result] .ae-controls{display:none}.ae-controls{flex:1;min-height:0;overflow:auto;align-content:start;border-bottom:0}.ae-output{flex:1;min-height:0;overflow:hidden}.ae-prompt,.ae-details{flex:1;min-height:0;max-height:none}.ae-prompt textarea.export-io{height:100%;min-height:0}.ae-jump{align-self:start}.ae-effect-list{max-height:200px}.ae-output-toolbar{flex:none}.ae-output-heading,.ae-footer{flex:none}}
+@container(max-width:460px){.ae-controls{display:block}.ae-narrow-nav{padding:5px 12px}.ae-effect-list{max-height:200px}.ae-jump{margin-top:4px}}

@@ -977,7 +977,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </section>
-      <SettingsExport v-if="exportOpen" v-model:effect="exportEffect" v-model:framework="exportFramework" v-model:style="exportStyle" v-model:all="exportAll" @close="closeExport()" @toast="notice"/>
+      <SettingsExport v-if="exportOpen" :mobile="isMobile" @settings="openSettings('animations')" v-model:effect="exportEffect" v-model:framework="exportFramework" v-model:style="exportStyle" v-model:all="exportAll" @close="closeExport()" @toast="notice"/>
     </div>
 
     <!-- ==================== overlays ==================== -->
