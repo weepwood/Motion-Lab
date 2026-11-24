@@ -81,3 +81,5 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 
 - 物理 FLIP 继承实际像素宽高变化速度并按新目标几何归一化；普通 FLIP 仅对有效物理动画采集速度以减少额外分配。新增连续中断宽高/位置、移动端默认聚焦及实际组合工程构建运行门禁。
 - 移动端默认收起两侧，手动展开互斥；聊天菜单定位抽离。候选仍须完整 CI、最新截图/基准、部署验证后才创建正式 Release。
+
+- 收口分支将应用和 lockfile 版本同步为 3.4.0，属于待验证的发布提交；未创建正式 tag/Release。保持独立 motion-kit 的版本不变（未单独发布）。
