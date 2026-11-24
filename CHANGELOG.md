@@ -1,3 +1,32 @@
+# 3.1.0 motion-kit：零依赖可复用动效包 + 静态演示页
+
+把本项目的研究成果提取成任何项目都能直接拷走的包，并配了一个零构建的单页演示。
+
+## 一、`packages/motion/`（motion-kit v1.0.0）
+
+8 个纯 ESM 模块 + token 样式表 + TS 类型声明，无任何运行时依赖、不需要构建工具：
+
+- `engine.js`：fastRaf 帧合批、doubleRaf、keyed 动画实例（`claimAnimation(key)` 同 key 新动画自动打断旧动画）
+- `easing.js`：贝塞尔求值/生成、阻尼弹簧 → `linear()`、tweb 实测曲线预设（`CURVES.standard/exit/flightX/flightY/overshoot`）、永不怕坏曲线的 `play()/settle()`、通用 `drag()`
+- `flight.js`：`flyClone()` 双曲线快照飞行（X/Y 分离曲线 → 弧线 + 落位交叉淡出）、`flyParabola()` 解析抛物线飞行（抬升/落点可调）
+- `ripple.js`：`attachRipple()` 最远角涟漪，时长在运行时从 `--mk-ripple-duration` 读回（JS/CSS 单源），等级 ≤1 自动降级快速淡入
+- `gestures.js`：`attachSwipe()` tweb 滑动数学（20px 锁轴弃权、64px 阻尼封顶、阈值 = 封顶×比例、图标按进度显影）
+- `scroll-saver.js`：`createScrollSaver()` 列表变化时的滚动锚点补偿
+- `reveal.js`：`revealFrom()` View Transitions 圆形状态揭示（无 API 时自动直落）
+- `tokens.css`：设计 token + 动画等级 0/1/2（位移 `-move` token 分离：等级 1 只归零位移、淡入照常）+ `prefers-reduced-motion` 回退链
+
+各框架接入方式（Vue 指令 / React hook / Svelte action）见 `packages/motion/README.md`。
+
+## 二、`demo/index.html`
+
+零构建单页：飞双曲线（连点演示自动打断）、抛物线表情、涟漪、滑动回复手势、圆形揭示换肤、列推挤视差+暗化、滚动锚点（可开关对比）、曲线赛跑、等级 0/1/2 语义演示；顶部控制条实时改 token 验证「单源」哲学。访问 `http://localhost:5173/demo/`。
+
+## 三、修复
+
+- 包初版两处 `??` 与 `||` 混用导致的 ESM 语法错误（ripple/gestures），已用 `node --check` 全量校验。
+
+---
+
 # 3.0.0 三层配置体系 & tweb 机制对齐
 
 本研究基于对 tweb（morethanwords/tweb）源码的逐文件精读，提炼出四个引擎层的机制，全部在本项目重新实现并做成可调配置。

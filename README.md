@@ -7,6 +7,10 @@
 
 > 仅用于研究和演示动效，与 Telegram 官方无关。
 
+## 复用到其他项目：`packages/motion/`（motion-kit）
+
+本项目把可复用的内核提取成了**零依赖纯 ESM 包**（帧合批、keyed 动画实例、双曲线飞行、抛物线飞行、涟漪、滑动手势、滚动锚点、圆形揭示 + token 样式表），拷进任何框架的项目即可使用。配套 `demo/index.html` 是零构建的交互演示（dev 模式下访问 `http://localhost:5173/demo/`）。详见 [`packages/motion/README.md`](packages/motion/README.md)。
+
 ## 本地运行
 
 Node.js 20.19+ 或 22.12+：
