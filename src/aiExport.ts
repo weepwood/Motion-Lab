@@ -11,7 +11,7 @@
  */
 
 import { bezierCss } from './motion'
-import { durationFor, easingFor, easing, settings } from './settings'
+import { durationFor, easingFor, easing, effectiveLevel, settings } from './settings'
 
 export type EffectId =
   | 'send' | 'reaction' | 'ripple' | 'swipe' | 'theme'
@@ -59,6 +59,7 @@ function effectSpecs(): EffectSpec[] {
   // heavy 类别在等级 ≤1 时被停用（durationFor 返回 0）：单独取一次，
   // 既用于参数表，也用于判断该走扩圈还是闪白降级分支。
   const rippleMs = durationFor('ripple')
+  const rippleFlash = effectiveLevel.value === 1 && settings.animations.ripple && settings.overrides.ripple.duration !== 0
   return [
     {
       id: 'send',
@@ -128,11 +129,11 @@ function effectSpecs(): EffectSpec[] {
           name: '波纹时长',
           value: num(rippleMs),
           note: rippleMs === 0
-            ? '当前等级 ≤1（heavy 效果停用）：此时走下面的 120ms 闪白降级分支'
+            ? (rippleFlash ? '当前等级 ≤1（heavy 效果停用）：等级 1 保留 120ms 闪白降级分支' : '已关闭：不生成波纹节点')
             : '在运行时从 CSS 变量读回，保证 JS/CSS 单源'
         },
         { name: '波纹曲线', value: easingFor('ripple'), note: '' },
-        { name: '降级闪白 FLASH', value: '120 ms', note: '等级 ≤1：不扩圈，opacity 0 → 1 的闪白；松手淡出 60 ms' },
+        { name: '降级闪白 FLASH', value: '120 ms', note: '等级 1（且涟漪启用）：不扩圈，opacity 0 → 1 的闪白；松手淡出 60 ms' },
         { name: '起始 scale', value: String(m.rippleStart), note: '触屏指针取 ≥0.27 起步，视觉上更跟手' },
         { name: '结束 scale', value: String(m.rippleEnd), note: '结束时刻恰好盖满最远角' }
       ],
@@ -141,8 +142,8 @@ function effectSpecs(): EffectSpec[] {
         '波纹直径 = 2 × 半径，left/top = 按下点 − 半径',
         'WAAPI 播放 transform: scale(起始) → scale(结束)，fill: forwards；easing 从 CSS 变量读取。',
         'pointerup：计算已经过时间 elapsed，淡出时长 = 总时长/2，若 elapsed + 淡出 > 总时长则立即开始淡出，否则延迟 总时长 − elapsed − 淡出 后开始；淡出用 ease-out，结束后移除节点。',
-        '等级 ≤1 降级（tweb animation-level 语义：减弱而非删除）：不扩圈，波纹固定 scale(结束值)，只播 opacity 0 → 1 的 120ms 闪白，松手淡出只有 60ms。',
-        '触屏 pointermove 与按下点距离 > 8px 即立刻走淡出（把机会让给滚动）。',
+        '等级 1 降级（tweb animation-level 语义：减弱而非删除）：不扩圈，波纹固定 scale(结束值)，只播 opacity 0 → 1 的 120ms 闪白，松手淡出只有 60ms。',
+        '等级 0、涟漪关闭或时长 0：不创建节点；触屏 pointermove 与按下点距离 > 8px 即立刻清理（把机会让给滚动）。',
         '注意控件若 position 为 static 需临时置 relative；裁剪层波及不到控件外部。'
       ],
       math: [
@@ -152,7 +153,7 @@ function effectSpecs(): EffectSpec[] {
       acceptance: [
         '无论点在控件的哪个角落，波纹都能盖满整个控件',
         '短按：波纹存活完整时长后淡出；长按：松手后 1/2 时长内淡出',
-        '等级 ≤1 时表现为 120ms 闪白（不扩圈），松手 60ms 内消失',
+        '等级 1（启用时）表现为 120ms 闪白（不扩圈），松手 60ms 内消失',
         '触屏按住后往上滑动：波纹立即消失，页面正常滚动',
         '同一控件连点多次：多波共存互不干扰，节点最终全部回收'
       ]

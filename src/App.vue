@@ -6,7 +6,7 @@ import {
   Smile, Sparkles, Trash2, X, Zap
 } from 'lucide-vue-next'
 import { vRipple } from './ripple'
-import { burst, cancelFlight, flyBubble, flyEmoji, holdHeavyAnimations, play, settle } from './motion'
+import { burst, cancelFlight, flyBubble, flyEmoji, revealFrom, play, settle } from './motion'
 import { createScrollSaver } from '../packages/motion/index.js'
 import {
   animationList, durationFor, easing, easingFor, effectiveLevel, isEnabled, microDuration, moveDurationFor,
@@ -229,7 +229,8 @@ const cssVars = computed(() => {
     vars['--ease-' + item.key] = easingFor(item.key)
   }
   // motion-kit bridge: package effects (ripple…) read the same live tokens (tweb reads --ripple-duration back from CSS).
-  vars['--mk-ripple-duration'] = durationFor('ripple') + 'ms'
+  const rippleFlash = effectiveLevel.value === 1 && settings.animations.ripple && settings.overrides.ripple.duration !== 0
+  vars['--mk-ripple-duration'] = (rippleFlash ? 120 : durationFor('ripple')) + 'ms'
   vars['--mk-ripple-easing'] = easingFor('ripple')
   return vars
 })
@@ -302,29 +303,21 @@ watch(folder, () => { void nextTick(measureIndicator) })
 
 /* ------------------------------------------------------------------ theme */
 
-type ViewTransitionDoc = { startViewTransition?: (cb: () => Promise<void>) => { ready: Promise<void>; finished?: Promise<void> } }
+let themeRequest = 0
 async function setTheme(mode: ThemeMode, x = innerWidth - 48, y = 48) {
+  const request = ++themeRequest
   const before = resolvedTheme.value
   const after = mode === 'system' ? (system.dark ? 'dark' : 'light') : mode
-  const apply = async () => { settings.theme = mode; await nextTick() }
-  const doc = document as unknown as ViewTransitionDoc
-  const duration = durationFor('themeReveal')
-  if (before === after || !duration || typeof doc.startViewTransition !== 'function') { await apply(); return }
-  try {
-    const transition = doc.startViewTransition(apply)
-    // P1 perf: hold decorative rendering while the snapshot reveals (tweb pauses heavy animations).
-    holdHeavyAnimations(transition.finished ?? transition.ready, 2000)
-    await transition.ready
-    const radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))
-    // tweb: entering night takes longer than leaving (600 ms vs 500 ms => ×0.83).
-    const ms = Math.round(before === 'dark' ? duration * 0.83 : duration)
-    play(document.documentElement, [
-      { clipPath: `circle(0px at ${x}px ${y}px)` },
-      { clipPath: `circle(${radius}px at ${x}px ${y}px)` }
-    ], ms, easingFor('themeReveal'), { pseudoElement: '::view-transition-new(root)' })
-  } catch {
-    await apply()
+  const apply = async () => {
+    if (request !== themeRequest) return
+    settings.theme = mode
+    await nextTick()
   }
+  const duration = durationFor('themeReveal')
+  if (before === after || !duration) { await apply(); return }
+  // Night reveal is longer than day (600/500 ms).
+  const ms = Math.round(before === 'dark' ? duration * 0.83 : duration)
+  await revealFrom({ x, y, duration: ms, easing: easingFor('themeReveal'), apply })
 }
 function toggleNight(e: MouseEvent) {
   void setTheme(resolvedTheme.value === 'light' ? 'dark' : 'light', e.clientX, e.clientY)
@@ -667,7 +660,7 @@ let swipe: { id: number; pointer: number; x: number; y: number; dx: number; el: 
 let pressTimer: ReturnType<typeof setTimeout> | undefined
 
 function startSwipe(e: PointerEvent, m: Message) {
-  if (e.button !== 0 || (e.target as HTMLElement).closest('button, .bubble-reply')) return
+  if (swipe || e.isPrimary === false || e.button !== 0 || (e.target as HTMLElement).closest('button, .bubble-reply')) return
   const el = e.currentTarget as HTMLElement
   swipe = { id: m.id, pointer: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, el, row: el.closest<HTMLElement>('.message-row'), axis: 'pending', armed: false }
   if (pressTimer) clearTimeout(pressTimer)
@@ -727,7 +720,7 @@ function endSwipe(e: PointerEvent, m: Message) {
   s.row?.style.removeProperty('--swipe')
   if (!distance) return
   play(s.el, [{ transform: `translate3d(${-distance}px,0,0)` }, { transform: 'translate3d(0,0,0)' }], durationFor('sidebar'), easingFor('sidebar'))
-  if (e.type !== 'pointercancel' && distance >= trigger) startReply(m)
+  if (e.type === 'pointerup' && distance >= trigger) startReply(m)
 }
 function onDouble(m: Message) {
   window.getSelection()?.removeAllRanges()
@@ -879,6 +872,12 @@ onBeforeUnmount(() => {
   timers.forEach(t => clearTimeout(t))
   timers.clear()
   if (pressTimer) clearTimeout(pressTimer)
+  if (swipe) {
+    swipe.el.style.transform = ''
+    swipe.row?.classList.remove('swiping')
+    swipe.row?.style.removeProperty('--swipe')
+    swipe = null
+  }
   if (toastTimer) clearTimeout(toastTimer)
   cancelAnimationFrame(fpsRaf)
   cancelFlight()
@@ -1063,6 +1062,8 @@ onBeforeUnmount(() => {
                       @pointermove="moveSwipe"
                       @pointerup="endSwipe($event, row.m)"
                       @pointercancel="endSwipe($event, row.m)"
+                      @lostpointercapture="endSwipe($event, row.m)"
+                      @pointerleave="swipe?.axis === 'pending' && endSwipe($event, row.m)"
                       @dblclick="onDouble(row.m)"
                     >
                       <div v-if="row.m.replyTo" class="bubble-reply" role="button" tabindex="0" @click.stop="jumpTo(row.m.replyTo)">

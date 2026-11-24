@@ -12,7 +12,7 @@
  *
  *   --mk-ripple-duration, --mk-ripple-easing, --mk-ripple-color
  *
- * At motion level ≤ 1 (`data-motion-level` on <html>) the expansion is replaced
+ * At motion level 1 (`data-motion-level` on <html>) the expansion is replaced
  * by a quick opacity flash — reduced, not removed (tweb animation-level semantics).
  */
 
@@ -43,18 +43,33 @@ export function attachRipple(el, opts = {}) {
     position: 'absolute', inset: '0', overflow: 'hidden',
     borderRadius: 'inherit', pointerEvents: 'none'
   })
-  if (getComputedStyle(el).position === 'static') el.style.position = 'relative'
+  const originalPosition = el.style.position
+  const changedPosition = getComputedStyle(el).position === 'static'
+  if (changedPosition) el.style.position = 'relative'
   el.append(layer)
 
   const cssVar = (name, fallback) => getComputedStyle(el).getPropertyValue(name).trim() || fallback
   const motionLevel = () => Number(document.documentElement.dataset.motionLevel ?? '2') || 0
 
   let live = null
+  const waves = new Set()
+  const dispose = t => {
+    clearTimeout(t.timer)
+    clearTimeout(t.removeTimer)
+    t.anim?.cancel()
+    t.fade?.cancel()
+    t.wave.remove()
+    waves.delete(t)
+    if (live === t) live = null
+  }
 
   const handler = e => {
     if (e.pointerType === 'mouse' && e.button !== 0) return
-    const duration = opts.duration ?? (Number.parseFloat(cssVar('--mk-ripple-duration', '700')) || 700)
-    if (duration <= 0) return
+    const token = cssVar('--mk-ripple-duration', '700ms')
+    const parsed = Number.parseFloat(token) * (token.endsWith('s') && !token.endsWith('ms') ? 1000 : 1)
+    const duration = opts.duration ?? (Number.isFinite(parsed) ? parsed : 700)
+    if (!Number.isFinite(duration) || duration <= 0 || motionLevel() === 0) return
+    if (live) dispose(live)
     const rect = el.getBoundingClientRect()
     const x = clamp(e.clientX - rect.left, 0, rect.width)
     const y = clamp(e.clientY - rect.top, 0, rect.height)
@@ -76,27 +91,29 @@ export function attachRipple(el, opts = {}) {
       ? play(wave, [{ transform: `scale(${end})`, opacity: 0 }, { transform: `scale(${end})`, opacity: 1 }], FLASH, 'ease-out', { fill: 'forwards' })
       : play(wave, [{ transform: `scale(${start})` }, { transform: `scale(${end})` }],
         duration, opts.easing ?? cssVar('--mk-ripple-easing', 'ease-out'), { fill: 'forwards' })
-    live = { wave, anim, reduced, duration, start: performance.now(), x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch' }
+    live = { wave, anim, reduced, duration, start: performance.now(), x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch', id: e.pointerId }
+    waves.add(live)
   }
 
   // tweb: a touch that turns into a scroll cancels the ripple immediately.
   const moveCancel = e => {
-    if (!live?.touch) return
-    if (Math.hypot(e.clientX - live.x, e.clientY - live.y) > 8) release()
+    if (!live?.touch || live.id !== e.pointerId) return
+    if (Math.hypot(e.clientX - live.x, e.clientY - live.y) > 8) dispose(live)
   }
 
-  const release = () => {
+  const release = e => {
     const t = live
-    if (!t) return
+    if (!t || t.id !== e.pointerId) return
+    if (e.type === 'pointercancel') { dispose(t); return }
     live = null
     const elapsed = performance.now() - t.start
     const fadeDuration = t.reduced ? FLASH / 2 : t.duration / 2
     const fadeDelay = t.reduced ? Math.max(FLASH - elapsed, 0) : Math.max(t.duration - elapsed - fadeDuration, 0)
-    setTimeout(() => {
-      const fade = play(t.wave, [{ opacity: getComputedStyle(t.wave).opacity }, { opacity: 0 }],
+    t.timer = setTimeout(() => {
+      t.fade = play(t.wave, [{ opacity: getComputedStyle(t.wave).opacity }, { opacity: 0 }],
         fadeDuration, 'ease-out', { fill: 'forwards' })
-      void (fade?.finished?.catch(() => {}))?.then?.(() => t.wave.remove())
-      setTimeout(() => t.wave.remove(), fadeDuration + 40)
+      t.removeTimer = setTimeout(() => dispose(t), fadeDuration + 40)
+      t.fade?.finished.then(() => dispose(t), () => {})
     }, fadeDelay)
   }
 
@@ -109,7 +126,8 @@ export function attachRipple(el, opts = {}) {
     window.removeEventListener('pointerup', release)
     window.removeEventListener('pointercancel', release)
     window.removeEventListener('pointermove', moveCancel)
+    waves.forEach(dispose)
     layer.remove()
-    live = null
+    if (changedPosition && el.style.position === 'relative') el.style.position = originalPosition
   }
 }

@@ -83,11 +83,11 @@ export function springCss(bounce) {
  * @returns {Animation | null}
  */
 export function play(el, frames, duration, easing = 'ease', extra = {}) {
-  if (duration <= 0 || typeof el?.animate !== 'function') return null
+  if (!Number.isFinite(duration) || duration <= 0 || typeof el?.animate !== 'function') return null
   try {
     return el.animate(frames, { ...extra, duration, easing })
   } catch {
-    return el.animate(frames, { ...extra, duration, easing: 'ease-out' })
+    try { return el.animate(frames, { ...extra, duration, easing: 'ease-out' }) } catch { return null }
   }
 }
 
