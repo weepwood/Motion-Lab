@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
       SHA: ${{ github.event.workflow_run.head_sha }}
       RUN_ID: ${{ github.event.workflow_run.id }}
       TAG: v3.4.0
@@ -54,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           for i in {1..60}; do
-            result=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml/runs" -f branch=main -f head_sha="$SHA" -f per_page=20 --jq '.workflow_runs | map(select(.head_sha == env.SHA)) | first | .conclusion // "pending"')
+            result=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml/runs" -f branch=main -f head_sha="$SHA" -f per_page=20 | jq -r --arg sha "$SHA" '.workflow_runs | map(select(.head_sha == $sha)) | first | .conclusion // "pending"')
             if [ "$result" = success ]; then exit 0; fi
             if [ "$result" = failure ] || [ "$result" = cancelled ]; then echo "::error::Pages $result for $SHA"; exit 1; fi
             sleep 5

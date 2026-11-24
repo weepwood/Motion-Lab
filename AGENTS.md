@@ -93,3 +93,5 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - 失败轮基准：30 次 P95 Chromium 16.9、Firefox 18、WebKit 61ms；两轮120次 P95 分别17.1/17.6、20/20、17/17ms，残留 0。Chromium GC 后 usedSize 4992684→5071336→5028208 B（+35524 B，约0.71%），不证明无泄漏。短时 WebKit 尾延迟波动仍需观察，未把本轮视为稳定性能提升。
 
 - GitHub 连接器不支持直接创建 Tag/Release；增加仅主分支 push 完整 CI 成功、同 SHA Pages 成功、线上生产文件与已验收 dist 哈希一致及 Chromium 三入口/JSON 导入导出回归后执行的 V3.4.0 专用工作流。先创建 draft，下载资产校验 ZIP/SHA256 后公开，核对 tag SHA；不覆盖已发布版本。PR 分支不会执行发布。
+
+- 响应式修复 CI 45404101335：88/88，23+8 CRC，Vue/React 运行通过；15 张截图复查，WebKit 动态缩小 2078→964 CSS px，三浏览器首次移动聚焦 844px。120×2 P95 Chromium 17.2/18.3、Firefox 21/21、WebKit 26/18ms；GC heap 4979800→5073312→5028496 B（+48696，约0.98%），残留 0；30 次 WebKit P95 57ms，列为非阻塞观察项。发布门禁显式 GH_REPO，部署查询以 jq --arg 精确 SHA 过滤；CI 增加生产冒烟脚本语法校验。

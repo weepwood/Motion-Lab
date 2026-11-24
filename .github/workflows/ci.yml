@@ -14,8 +14,10 @@ jobs:
           node-version: '22'
       - name: Install
         run: npm ci --no-audit --no-fund
-      - name: CI gate 1 · motion-kit import smoke
-        run: npm run check:pkg
+      - name: CI gate 1 · motion-kit import smoke and release script syntax
+        run: |
+          npm run check:pkg
+          node --check scripts/verify-production.mjs
       - name: Typecheck and build (stages demo into dist/)
         run: npm run build
       - name: Install browsers
