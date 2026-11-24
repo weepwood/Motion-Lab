@@ -12,11 +12,9 @@ import {
   type AnimationKey, type AnimationMeta, type DemoKey, type SettingsTab, type ThemeMode
 } from '../settings'
 import { exportSettings, importSettings, motionPresets } from '../presets'
-import SettingsExport from './SettingsExport.vue'
 import SettingsGeneral from './SettingsGeneral.vue'
 import SettingsMechanisms from './SettingsMechanisms.vue'
 import SettingsPower from './SettingsPower.vue'
-import type { EffectId, Framework, ImplStyle } from '../aiExport'
 import ToggleRow from './ToggleRow.vue'
 import RadioRow from './RadioRow.vue'
 import RangeSlider from './RangeSlider.vue'
@@ -30,18 +28,16 @@ const emit = defineEmits<{
   theme: [mode: ThemeMode, x: number, y: number]
   about: []
   toast: [text: string]
+  export: []
 }>()
 
-const exportEffect = ref<EffectId>('send')
-const exportFramework = ref<Framework>('react')
-const exportStyle = ref<ImplStyle>('waapi')
-const exportAll = ref(false)
 const stack = ref<SettingsTab[]>(props.entry && props.entry !== 'main' ? ['main', props.entry] : ['main'])
 const dir = ref<'push' | 'pop'>('push')
 const current = computed<SettingsTab>(() => stack.value[stack.value.length - 1] ?? 'main')
 const titles: Record<SettingsTab, string> = { main: '设置', general: '通用设置', animations: '动画与省电', lab: '动效实验室', export: 'AI 复刻导出' }
 
 function go(tab: SettingsTab) {
+  if(tab==='export'){emit('export');return}
   if (current.value === tab) return
   if (tab === 'main') { back(); return }
   dir.value = 'push'
@@ -199,7 +195,7 @@ function reset() {
                 </button>
                 <button v-ripple class="row nav-row" @click="go('export')">
                   <Code2 class="row-icon" :size="22" />
-                  <span class="row-text"><span class="row-title">AI 复刻导出<span class="row-badge">新</span></span><small>把当前手感变成给 AI 的复刻提示词</small></span>
+                  <span class="row-text"><span class="row-title">AI 复刻导出</span><small>打开右侧工作区 · 实时参数与提示词</small></span>
                   <ChevronRight class="row-chevron" :size="18" />
                 </button>
               </div>
@@ -300,9 +296,6 @@ function reset() {
                 <textarea v-model="configText" class="config-io" rows="5" aria-label="配置 JSON" placeholder="导出的配置会显示在这里，也可以粘贴别人的配置后点「导入」"></textarea>
               </div>
             </template>
-
-            <!-- ============ AI export ============ -->
-            <SettingsExport v-else-if="current === 'export'" v-model:effect="exportEffect" v-model:framework="exportFramework" v-model:style="exportStyle" v-model:all="exportAll" @toast="emit('toast', $event)" />
 
             <!-- ============ lab ============ -->
             <template v-else>
