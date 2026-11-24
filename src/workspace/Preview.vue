@@ -1,22 +1,25 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
-import { animateLayout, captureLayout, sharedElement, drag, cancelLayout, play } from '../../packages/motion/index.js'
+import { animateLayout, captureLayout, drag, cancelLayout, play } from '../../packages/motion/index.js'
 import { keyframes, easingOf, isTimeline, type Config } from './model'
 const props=defineProps<{ config: Config; time: number; label: string; stress: number }>()
 const root=ref<HTMLElement|null>(null), order=ref([1,2,3,4]), expanded=ref(false)
 let animations:Animation[]=[], detach:(()=>void)|undefined, generation=0
-function clear(){animations.forEach(a=>a.cancel());animations=[];detach?.();detach=undefined;if(root.value)cancelLayout(root.value.querySelectorAll('.ws-object'))}
+let dragged: HTMLElement | undefined
+let dragReturn: Animation | null = null
+function clear(){animations.forEach(a=>a.cancel());animations=[];detach?.();detach=undefined;dragReturn?.cancel();dragReturn=null;if(dragged){dragged.style.transform='';dragged=undefined}if(root.value)cancelLayout(root.value.querySelectorAll('.ws-object'))}
 function objects(){return Array.from(root.value?.querySelectorAll<HTMLElement>('.ws-object')??[])}
 function seek(){for(const a of animations)a.currentTime=props.time}
 async function prepare(){const token=++generation;clear();await nextTick();if(token!==generation)return
  if(isTimeline(props.config.effect)){
+   if(matchMedia('(prefers-reduced-motion: reduce)').matches)return
    for(const [i,el] of objects().entries()){
      const a=play(el,keyframes(props.config),props.config.duration,easingOf(props.config),{delay:props.config.effect==='stagger'?i*props.config.stagger:0,fill:'both'})
      if(a){a.pause();animations.push(a)}
    }
    seek()
  } else if(props.config.effect==='drag'){
-   const el=objects()[0];if(el){let baseX=0,baseY=0;detach=drag(el,{onStart:()=>{el.getAnimations().forEach(a=>a.cancel());baseX=0;baseY=0},onUpdate:({dx,dy})=>{baseX=dx;baseY=dy;el.style.transform='translate('+dx+'px,'+dy+'px)'},onEnd:()=>{el.style.transform='';if(!matchMedia('(prefers-reduced-motion: reduce)').matches)play(el,[{transform:'translate('+baseX+'px,'+baseY+'px)'},{transform:'none'}],props.config.duration,easingOf(props.config))}})}
+   const el=objects()[0];if(el){dragged=el;let baseX=0,baseY=0;detach=drag(el,{onStart:()=>{el.getAnimations().forEach(a=>a.cancel());baseX=0;baseY=0},onUpdate:({dx,dy})=>{baseX=dx;baseY=dy;el.style.transform='translate('+dx+'px,'+dy+'px)'},onEnd:()=>{el.style.transform='';if(!matchMedia('(prefers-reduced-motion: reduce)').matches)dragReturn=play(el,[{transform:'translate('+baseX+'px,'+baseY+'px)'},{transform:'none'}],props.config.duration,easingOf(props.config))}})}
  }
 }
 async function replay(){

@@ -18,7 +18,7 @@ export function sanitizeConfig(raw: unknown): Config {
   if (!raw || typeof raw !== 'object') throw Error('配置必须为对象')
   const v = raw as Partial<Config>
   if (!catalog.some(item => item.id === v.effect)) throw Error('未知动效类型')
-  const d = defaults(v.effect)
+  const d = defaults(v.effect as Effect)
   const curve = Array.isArray(v.curve) && v.curve.length === 4 ? v.curve.map((x,i) => n(x,i%2 ? -1 : 0,i%2 ? 2 : 1,d.curve[i])) as Bezier : d.curve
   const frames = Array.isArray(v.frames) ? v.frames.slice(0, 30).filter(x => x && typeof x === 'object').map(x => ({offset:n(x.offset,0,1,.5),x:n(x.x,-300,300,0),y:n(x.y,-300,300,0),scale:n(x.scale,.1,3,1),opacity:n(x.opacity,0,1,1)})).filter(x => x.offset > 0 && x.offset < 1).sort((a,b)=>a.offset-b.offset).filter((x,i,a)=>!i||x.offset!==a[i-1].offset) : []
   return {effect:d.effect,duration:n(v.duration,0,3000,d.duration),curve,bounce:n(v.bounce,0,.6,d.bounce),distance:n(v.distance,0,240,d.distance),stagger:n(v.stagger,0,200,d.stagger),middle:n(v.middle,.05,.95,d.middle),frames}
@@ -26,7 +26,7 @@ export function sanitizeConfig(raw: unknown): Config {
 export const isTimeline = (effect: Effect) => !['flip','shared','drag'].includes(effect)
 export function keyframes(c: Config): Keyframe[] {
   if (c.effect === 'spring') return springFrames(-c.distance,0,c.bounce).map(f=>({offset:f.offset,transform:'translateX('+f.value+'px)'}))
-  const start = {offset:0,x:c.effect==='slide'?-c.distance:0,y:c.effect==='stagger'?c.distance/4:0,scale:c.effect==='scale'?.65:1,opacity:['fade','scale','stagger'].includes(c.effect)?0:1}
+  const start = {offset:0,x:c.effect==='slide'?-c.distance:0,y:c.effect==='stagger'?c.distance/4:0,scale:c.effect==='scale' ? .65 : 1,opacity:['fade','scale','stagger'].includes(c.effect)?0:1}
   const end = {offset:1,x:0,y:0,scale:1,opacity:1}
   return [start,...c.frames,end].map(f=>({offset:f.offset,transform:'translate('+f.x+'px,'+f.y+'px) scale('+f.scale+')',opacity:f.opacity}))
 }

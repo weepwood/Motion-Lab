@@ -6,10 +6,10 @@ import { buildEffectPrompt, buildSystemPrompt, exportableEffects, frameworkLabel
 const emit = defineEmits<{ toast: [text: string] }>()
 /* ---- AI 复刻导出 ---- */
 const effects = exportableEffects()
-const effectTarget = ref<EffectId>('send')
-const framework = ref<Framework>('react')
-const implStyle = ref<ImplStyle>('waapi')
-const exportAll = ref(false)
+const effectTarget = defineModel<EffectId>('effect', { required: true })
+const framework = defineModel<Framework>('framework', { required: true })
+const implStyle = defineModel<ImplStyle>('style', { required: true })
+const exportAll = defineModel<boolean>('all', { required: true })
 const promptBox = ref<HTMLTextAreaElement | null>(null)
 
 const options = computed(() => ({ framework: framework.value, style: implStyle.value }))

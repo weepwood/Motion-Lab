@@ -6,7 +6,7 @@ import {
   Smile, Sparkles, Trash2, X, Zap
 } from 'lucide-vue-next'
 import { vRipple } from './ripple'
-import { createChatData, MIN, PAGE, type Message } from './chat/data'
+import { createChatData, MIN, PAGE, type Message, type Chat } from './chat/data'
 import { createReplySwipe } from './chat/replySwipe'
 import { burst, cancelFlight, flyBubble, flyEmoji, revealFrom, play, settle } from './motion'
 import { createScrollSaver } from '../packages/motion/index.js'

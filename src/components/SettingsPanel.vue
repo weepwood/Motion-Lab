@@ -13,6 +13,7 @@ import {
 } from '../settings'
 import { exportSettings, importSettings, motionPresets } from '../presets'
 import SettingsExport from './SettingsExport.vue'
+import type { EffectId, Framework, ImplStyle } from '../aiExport'
 import ToggleRow from './ToggleRow.vue'
 import RadioRow from './RadioRow.vue'
 import RangeSlider from './RangeSlider.vue'
@@ -28,6 +29,10 @@ const emit = defineEmits<{
   toast: [text: string]
 }>()
 
+const exportEffect = ref<EffectId>('send')
+const exportFramework = ref<Framework>('react')
+const exportStyle = ref<ImplStyle>('waapi')
+const exportAll = ref(false)
 const stack = ref<SettingsTab[]>(props.entry && props.entry !== 'main' ? ['main', props.entry] : ['main'])
 const dir = ref<'push' | 'pop'>('push')
 const current = computed<SettingsTab>(() => stack.value[stack.value.length - 1] ?? 'main')
@@ -370,7 +375,7 @@ function reset() {
             </template>
 
             <!-- ============ AI export ============ -->
-            <SettingsExport v-else-if="current === 'export'" @toast="emit('toast', $event)" />
+            <SettingsExport v-else-if="current === 'export'" v-model:effect="exportEffect" v-model:framework="exportFramework" v-model:style="exportStyle" v-model:all="exportAll" @toast="emit('toast', $event)" />
 
             <!-- ============ lab ============ -->
             <template v-else>

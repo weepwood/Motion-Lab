@@ -104,7 +104,7 @@ export async function settle(animation) {
 export function drag(el, { onStart, onUpdate, onEnd } = {}) {
   let active = null
   const down = e => {
-    if (e.button !== undefined && e.button !== 0) return
+    if (active || e.isPrimary === false || (e.button !== undefined && e.button !== 0)) return
     active = { id: e.pointerId, x: e.clientX, y: e.clientY }
     try { el.setPointerCapture(e.pointerId) } catch { /* not available */ }
     onStart?.(e)
@@ -117,16 +117,22 @@ export function drag(el, { onStart, onUpdate, onEnd } = {}) {
   const up = e => {
     if (!active || active.id !== e.pointerId) return
     active = null
+    try { if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId) } catch { /* already released */ }
     onEnd?.(e)
   }
   el.addEventListener('pointerdown', down)
   el.addEventListener('pointermove', move)
   el.addEventListener('pointerup', up)
   el.addEventListener('pointercancel', up)
+  el.addEventListener('lostpointercapture', up)
   return () => {
+    const state = active
+    active = null
+    if (state) try { if (el.hasPointerCapture(state.id)) el.releasePointerCapture(state.id) } catch { /* already released */ }
     el.removeEventListener('pointerdown', down)
     el.removeEventListener('pointermove', move)
     el.removeEventListener('pointerup', up)
     el.removeEventListener('pointercancel', up)
+    el.removeEventListener('lostpointercapture', up)
   }
 }
