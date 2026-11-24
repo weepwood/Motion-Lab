@@ -75,11 +75,11 @@ test('generated JavaScript layout and drag can mount, interact and dispose',asyn
       const el=root.querySelector<HTMLElement>('[data-motion-item]')!
       const evt=(type:string,x:number)=>el.dispatchEvent(new PointerEvent(type,{pointerId:1,isPrimary:true,button:0,clientX:x,clientY:10}))
       evt('pointerdown',10);evt('pointermove',70)
-      const moved=el.style.transform
+      const moved=new DOMMatrixReadOnly(getComputedStyle(el).transform).m41
       evt('pointerup',70)
       drag.dispose()
       return {before,after,flipClean,moved,dragClean:root.children.length===0}
     }finally{root.remove()}
   },{flipCode,dragCode})
-  expect(result).toEqual({before:'1',after:'2',flipClean:true,moved:'translate(60px, 0px)',dragClean:true})
+  expect(result).toEqual({before:'1',after:'2',flipClean:true,moved:60,dragClean:true})
 })
