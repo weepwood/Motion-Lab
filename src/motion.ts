@@ -3,7 +3,15 @@
  *
  * Everything here is an original implementation. Curves, the spring solver and
  * the send "flight" only use transform / opacity so the compositor can run them.
+ * The send flight follows the same idea as Telegram Web's `sendFlights.ts`:
+ * a snapshot clone flies from the composer to the real bubble's final position,
+ * with separate X/Y curves so the path arcs, then cross-fades into the real
+ * bubble ("landing"). The reaction flight uses the analytic parabola from
+ * tweb's `reactionFlight.ts`. Mechanism parameters come from the settings store.
  */
+
+import { claimAnimation, cancelAnimationByKey } from './engine'
+import type { MechanismParams } from './settings'
 
 export type Bezier = [number, number, number, number]
 export type EasingKey = 'telegram' | 'soft' | 'snappy' | 'spring' | 'custom'
@@ -23,6 +31,9 @@ export const easingMeta: Record<EasingKey, EasingMeta> = {
 }
 
 export const easingOrder: EasingKey[] = ['telegram', 'soft', 'snappy', 'spring', 'custom']
+
+/** Telegram Web's standard UI curve — the token almost every tweb transition uses. */
+export const TWEB_STANDARD: Bezier = [0.4, 0, 0.2, 1]
 
 /** Used when the browser does not understand CSS `linear()` easing. */
 export const SPRING_FALLBACK: Bezier = [0.34, 1.56, 0.64, 1]
@@ -128,23 +139,45 @@ export async function settle(animation: Animation | null | undefined): Promise<v
   }
 }
 
-let flight: { wrapper: HTMLElement; animations: Animation[] } | null = null
+/* ------------------------------------------------------------------ flights */
+
+interface FlightContext {
+  claim: ReturnType<typeof claimAnimation>
+  wrapper: HTMLElement
+  animations: Set<Animation>
+}
+
+const FLIGHT_KEY = {}
+let flightCtx: FlightContext | null = null
 
 export function cancelFlight() {
-  if (!flight) return
-  flight.animations.forEach(a => a.cancel())
-  flight.wrapper.remove()
-  flight = null
+  if (!flightCtx) return
+  cancelAnimationByKey(FLIGHT_KEY)
+}
+
+function disposeFlight(ctx: FlightContext) {
+  ctx.animations.forEach(a => a.cancel())
+  ctx.animations.clear()
+  ctx.wrapper.remove()
+  ctx.claim.done()
 }
 
 /**
- * Send flight (FLIP): clone the real bubble at its final position, then play it
- * backwards from the composer. X and Y run on slightly different durations so the
- * path arcs instead of moving in a straight line.
- * The clone is appended inside `container` so it inherits the active theme variables,
- * and wrapped in an element carrying the row classes so it keeps the same look.
+ * Send flight (FLIP + tweb sendFlights): clone the real bubble at its final
+ * position, then play it backwards from the composer. X and Y use separate
+ * curves (tweb CURVE_X/CURVE_Y) so the path arcs instead of moving straight.
+ * When the clone lands, `reveal()` shows the real bubble and the clone
+ * cross-fades out (tweb LAND_FADE). A new flight cancels the previous one.
  */
-export async function flyBubble(target: HTMLElement, from: DOMRect, container: HTMLElement, duration: number, easing: string, rowClass = ''): Promise<void> {
+export async function flyBubble(
+  target: HTMLElement,
+  from: DOMRect,
+  container: HTMLElement,
+  duration: number,
+  mech: Pick<MechanismParams, 'sendCurveX' | 'sendCurveY' | 'sendLandFade'>,
+  reveal: (() => void) | null,
+  rowClass = ''
+): Promise<void> {
   cancelFlight()
   const to = target.getBoundingClientRect()
   if (duration <= 0 || to.width <= 0 || to.height <= 0) return
@@ -162,39 +195,86 @@ export async function flyBubble(target: HTMLElement, from: DOMRect, container: H
   const dx = from.left + 14 - to.left
   const dy = from.top + from.height / 2 - (to.top + to.height / 2)
   const scale = clamp(from.height / Math.max(to.height, 1), 0.82, 1)
+  const ctx: FlightContext = { claim: claimAnimation(FLIGHT_KEY), wrapper, animations: new Set() }
+  flightCtx = ctx
+  // Interruption (new send, chat switch, unmount) must always clean up.
+  void ctx.claim.cancelled.then(() => { disposeFlight(ctx); if (flightCtx === ctx) flightCtx = null })
+
   const xAnim = play(wrapper, [
     { transform: `translate3d(${dx}px,0,0)` },
     { transform: 'translate3d(0,0,0)' }
-  ], duration, easing, { fill: 'both' })
+  ], duration, bezierCss(mech.sendCurveX), { fill: 'both' })
   const yAnim = play(ghost, [
     { transform: `translate3d(0,${dy}px,0) scale(${scale})`, opacity: 0.4 },
     { transform: 'translate3d(0,0,0) scale(1)', opacity: 1 }
-  ], Math.round(duration * 0.82), easing, { fill: 'both' })
-  const animations = [xAnim, yAnim].filter((a): a is Animation => a !== null)
-  const current = { wrapper, animations }
-  flight = current
-  await Promise.all(animations.map(settle))
-  if (flight === current) flight = null
-  wrapper.remove()
+  ], duration, bezierCss(mech.sendCurveY), { fill: 'both' })
+  for (const a of [xAnim, yAnim]) if (a) ctx.animations.add(a)
+
+  await Promise.all([xAnim, yAnim].map(settle))
+  if (ctx.claim.isCancelled()) return
+  // Landed: show the real bubble, then cross-fade the clone away (tweb LAND_FADE).
+  reveal?.()
+  const landFade = mech.sendLandFade
+  if (landFade > 0) {
+    const fade = play(ghost, [{ opacity: 1 }, { opacity: 0 }], landFade, 'ease-out', { fill: 'forwards' })
+    if (fade) ctx.animations.add(fade)
+    await settle(fade)
+  }
+  if (ctx.claim.isCancelled()) return
+  disposeFlight(ctx)
+  if (flightCtx === ctx) flightCtx = null
 }
 
-/** Fly a small element (e.g. a reaction emoji) from one rect to another. */
-export async function flyEmoji(emoji: string, from: DOMRect, to: DOMRect, container: HTMLElement, duration: number, easing: string): Promise<void> {
+/**
+ * Fly a small element (e.g. a reaction emoji) from one rect to another along a
+ * real parabola (tweb reactionFlight): y = y0 + b·t + a·t² through the midpoint
+ * raised by `elevation`; horizontal progress is linear. The landing target is
+ * revealed at `landing`×duration (tweb LANDING_UNTIL = 0.75) so the chip
+ * "receives" the emoji while it is still in the air.
+ */
+export async function flyEmoji(
+  emoji: string,
+  from: DOMRect,
+  to: DOMRect,
+  container: HTMLElement,
+  duration: number,
+  mech: Pick<MechanismParams, 'reactionElevation' | 'reactionLanding'>,
+  options: { key?: unknown; scaleStart?: number; reveal?: () => void } = {}
+): Promise<void> {
   if (duration <= 0) return
+  const key = options.key ?? {}
+  cancelAnimationByKey(key)
   const node = document.createElement('span')
   node.className = 'emoji-flight'
   node.textContent = emoji
   Object.assign(node.style, { left: to.left + to.width / 2 + 'px', top: to.top + to.height / 2 + 'px' })
   container.append(node)
+  const claim = claimAnimation(key)
+  let revealTimer: ReturnType<typeof setTimeout> | undefined
+  void claim.cancelled.then(() => { if (revealTimer) clearTimeout(revealTimer); node.remove(); claim.done() })
+
   const dx = from.left + from.width / 2 - (to.left + to.width / 2)
-  const dy = from.top + from.height / 2 - (to.top + to.height / 2)
-  const anim = play(node, [
-    { transform: `translate(-50%,-50%) translate3d(${dx}px,${dy}px,0) scale(1.6)` },
-    { transform: `translate(-50%,-50%) translate3d(${dx * 0.35}px,${dy * 0.35 - 36}px,0) scale(1.9)`, offset: 0.45 },
-    { transform: 'translate(-50%,-50%) translate3d(0,0,0) scale(1)' }
-  ], duration, easing, { fill: 'both' })
-  await settle(anim)
+  const dy0 = from.top + from.height / 2 - (to.top + to.height / 2)
+  // Parabola through (0, dy0), (1, 0) whose mid-flight point rises by `elevation`.
+  const yMid = dy0 / 2 - mech.reactionElevation
+  const b = 4 * (yMid - dy0) - (0 - dy0)
+  const a = (0 - dy0) - b
+  const stops = 16
+  const frames: Keyframe[] = []
+  for (let i = 0; i <= stops; i++) {
+    const t = i / stops
+    const y = dy0 + b * t + a * t * t
+    const scale = (options.scaleStart ?? 1.6) + (1 - (options.scaleStart ?? 1.6)) * t
+    frames.push({ transform: `translate(-50%,-50%) translate3d(${round(dx * t, 2)}px,${round(y, 2)}px,0) scale(${round(scale, 3)})`, offset: t || undefined })
+  }
+  // The landing target appears while the emoji is still in the air (tweb LANDING_UNTIL).
+  revealTimer = setTimeout(() => { if (!claim.isCancelled()) options.reveal?.() }, Math.round(duration * mech.reactionLanding))
+  const anim = play(node, frames, duration, 'linear', { fill: 'both' })
+  if (claim.isCancelled()) { if (revealTimer) clearTimeout(revealTimer); return }
+  if (anim) await settle(anim)
+  if (revealTimer) clearTimeout(revealTimer)
   node.remove()
+  claim.done()
 }
 
 /** Burst of particles around a point; skipped entirely in power-saving mode. */

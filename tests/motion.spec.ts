@@ -77,16 +77,55 @@ test('motion settings change real CSS variables and persist', async ({ page }) =
   await expect(page.locator('.group-caption').filter({ hasText: '基础时长' })).toContainText('500 ms')
 })
 
-test('turning interface animations off sends without a flight', async ({ page }) => {
+test('turning the animation level off sends without a flight', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: '打开动效设置' }).click()
-  await page.getByText('界面动画', { exact: true }).click()
+  await page.getByRole('radiogroup', { name: '动画等级' }).getByRole('radio', { name: '关闭' }).click()
   await expect(page.locator('.app-shell')).toHaveClass(/motion-off/)
   const input = page.getByRole('textbox', { name: '消息内容' })
   await input.fill('无动画发送')
   await input.press('Enter')
   await expect(page.locator('.flight-layer')).toHaveCount(0)
   await expect(list(page).getByText('无动画发送', { exact: true })).toBeVisible()
+})
+
+test('animation level 1 degrades to fades: displacement collapses, menus keep fading', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: '打开动效设置' }).click()
+  await page.getByRole('radiogroup', { name: '动画等级' }).getByRole('radio', { name: '降级' }).click()
+  await expect(page.locator('.app-shell')).toHaveClass(/anim-level-1/)
+  const shell = page.locator('.app-shell')
+  // Movement durations collapse to 0 (tweb animation-level-1), fade durations survive.
+  await expect.poll(() => shell.evaluate(el => getComputedStyle(el).getPropertyValue('--dur-menu-move').trim())).toBe('0ms')
+  await expect.poll(() => shell.evaluate(el => Number.parseFloat(getComputedStyle(el).getPropertyValue('--dur-menu')) || 0)).toBeGreaterThan(0)
+  // Displacement-only categories (send flight) are switched off entirely at level 1.
+  await expect.poll(() => shell.evaluate(el => getComputedStyle(el).getPropertyValue('--dur-send').trim())).toBe('0ms')
+})
+
+test('telegram preset applies measured tweb values and persists', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: '打开动效设置' }).click()
+  await page.getByRole('button', { name: /Telegram 官方手感/ }).click()
+  const shell = page.locator('.app-shell')
+  // tweb tokens: .2s menus, 600 ms night reveal (7s ripple comes from the same store).
+  await expect.poll(() => shell.evaluate(el => getComputedStyle(el).getPropertyValue('--dur-menu').trim())).toBe('200ms')
+  await expect.poll(() => shell.evaluate(el => getComputedStyle(el).getPropertyValue('--dur-themeReveal').trim())).toBe('600ms')
+  await page.waitForTimeout(250)
+  await page.reload()
+  await expect.poll(() => shell.evaluate(el => getComputedStyle(el).getPropertyValue('--dur-menu').trim())).toBe('200ms')
+})
+
+test('per-category duration override drives the real CSS variable', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: '打开动效设置' }).click()
+  await page.getByRole('radio', { name: '菜单与弹窗', exact: true }).click()
+  await page.getByText('时长覆盖', { exact: true }).click()
+  await page.getByLabel('菜单与弹窗 时长覆盖').fill('300')
+  const shell = page.locator('.app-shell')
+  await expect.poll(() => shell.evaluate(el => getComputedStyle(el).getPropertyValue('--dur-menu').trim())).toBe('300ms')
+  await page.waitForTimeout(250)
+  await page.reload()
+  await expect.poll(() => shell.evaluate(el => getComputedStyle(el).getPropertyValue('--dur-menu').trim())).toBe('300ms')
 })
 
 test('rapid chat switches and multiple sends clean up animations', async ({ page }) => {

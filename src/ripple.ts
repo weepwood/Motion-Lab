@@ -1,6 +1,6 @@
 import type { Directive } from 'vue'
 import { play } from './motion'
-import { durationFor, easing } from './settings'
+import { durationFor, easingFor, effectiveLevel, settings } from './settings'
 
 type RippleWave = {
   animations: Animation[]
@@ -11,9 +11,15 @@ type RippleWave = {
 type RippleBinding = { handler: (e: PointerEvent) => void; layer: HTMLElement; waves: Set<RippleWave> }
 const bindings = new WeakMap<HTMLElement, RippleBinding>()
 
+/** tweb animation-level 0/1 quick highlight: no expansion, just a fast fade in/out. */
+const LEVEL1_FLASH = 120
+
 /**
  * Telegram Web-style press ripple: it grows while the pointer is held, then
  * fades after release. Short presses keep the wave visible long enough to read.
+ * The radius is the distance from the press point to the farthest corner
+ * (tweb `√((|y-h/2|+h/2)² + (|x-w/2|+w/2)²)`), duration and easing come from
+ * the ripple category; start/end scale are mechanism parameters.
  */
 export const vRipple: Directive<HTMLElement> = {
   mounted(el) {
@@ -44,10 +50,17 @@ export const vRipple: Directive<HTMLElement> = {
 
       const startedAt = performance.now()
       const touch = e.pointerType === 'touch'
-      const animation = play(wave, [
-        { transform: `scale(${touch ? 0.27 : 0})` },
-        { transform: 'scale(2)' }
-      ], duration, easing.value, { fill: 'forwards' })
+      const reduced = effectiveLevel.value < 2
+      const startScale = touch ? Math.max(0.27, settings.mech.rippleStart) : settings.mech.rippleStart
+      const animation = reduced
+        ? play(wave, [
+            { transform: `scale(${settings.mech.rippleEnd})`, opacity: 0 },
+            { transform: `scale(${settings.mech.rippleEnd})`, opacity: 1 }
+          ], LEVEL1_FLASH, 'ease-out', { fill: 'forwards' })
+        : play(wave, [
+            { transform: `scale(${startScale})` },
+            { transform: `scale(${settings.mech.rippleEnd})` }
+          ], duration, easingFor('ripple'), { fill: 'forwards' })
       const win = el.ownerDocument.defaultView || window
       let detachListeners = () => {}
       const rippleWave: RippleWave = {
@@ -70,9 +83,9 @@ export const vRipple: Directive<HTMLElement> = {
         detachListeners()
 
         const elapsed = performance.now() - startedAt
-        const fadeDuration = duration / 2
-        const fadeDelay = Math.max(duration - elapsed - fadeDuration, 0)
-        const removeDelay = Math.max(duration - elapsed, fadeDuration)
+        const fadeDuration = reduced ? LEVEL1_FLASH / 2 : duration / 2
+        const fadeDelay = reduced ? LEVEL1_FLASH - Math.min(elapsed, LEVEL1_FLASH) : Math.max(duration - elapsed - fadeDuration, 0)
+        const removeDelay = reduced ? LEVEL1_FLASH * 2 : Math.max(duration - elapsed, fadeDuration)
         rippleWave.timers.push(win.setTimeout(() => {
           const fade = play(wave, [{ opacity: 1 }, { opacity: 0 }], fadeDuration, 'ease-out', { fill: 'forwards' })
           if (fade) rippleWave.animations.push(fade)

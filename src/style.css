@@ -58,10 +58,16 @@ button:disabled { cursor: not-allowed }
 .ripple-container { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; contain: paint; pointer-events: none }
 .ripple-wave { position: absolute; border-radius: 50%; background: var(--ripple); pointer-events: none; transform: scale(0) }
 
-/* All motion switched off: interface toggle or system "reduce motion". */
+/* All motion switched off (level 0): user toggle, system "reduce motion" or power saving. */
 .motion-off *, .motion-off *::before, .motion-off *::after {
   transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important;
 }
+/*
+ * Level 1 (tweb animation-level-1): displacement jumps instantly, fades and
+ * colours keep their duration. Duration tokens ending in -move are set to 0
+ * by the settings store for this level; the fade counterpart keeps running.
+ */
+.anim-level-1 .ripple-wave { animation: none }
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal }
 
 /* ---------- layout ---------- */
@@ -70,11 +76,13 @@ button:disabled { cursor: not-allowed }
 .slider { position: relative; flex: 1; min-height: 0; overflow: hidden }
 .tab { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--surface) }
 
-/* Telegram-style navigation: new page slides over, previous page parallaxes 25%. */
-.tab-push-enter-active, .tab-push-leave-active, .tab-pop-enter-active, .tab-pop-leave-active { transition: transform var(--dur-sidebar) var(--ease) }
+/* Telegram-style column push (tweb slideNavigation): the new page slides over,
+   the leaving page parallaxes away and dims to 80% brightness. */
+.tab-push-enter-active, .tab-pop-leave-active { transition: transform var(--dur-sidebar-move) var(--ease-sidebar), filter var(--dur-sidebar-move) var(--ease-sidebar), opacity var(--dur-sidebar) ease }
+.tab-push-leave-active, .tab-pop-enter-active { transition: transform var(--dur-sidebar-move) var(--ease-sidebar), filter var(--dur-sidebar-move) var(--ease-sidebar) }
 .tab-push-enter-active, .tab-pop-leave-active { z-index: 2; box-shadow: -6px 0 18px rgba(0, 0, 0, .08) }
 .tab-push-enter-from, .tab-pop-leave-to { transform: translate3d(100%, 0, 0) }
-.tab-push-leave-to, .tab-pop-enter-from { transform: translate3d(-25%, 0, 0) }
+.tab-push-leave-to, .tab-pop-enter-from { transform: translate3d(calc(-1 * var(--nav-parallax)), 0, 0); filter: brightness(var(--nav-dim)) }
 
 /* ---------- generic controls ---------- */
 .icon-btn {
@@ -87,6 +95,7 @@ button:disabled { cursor: not-allowed }
 .icon-swap-enter-active, .icon-swap-leave-active { transition: transform var(--dur-micro) var(--ease), opacity var(--dur-micro) ease }
 .icon-swap-enter-from { opacity: 0; transform: rotate(-90deg) scale(.6) }
 .icon-swap-leave-to { opacity: 0; transform: rotate(90deg) scale(.6) }
+/* WAAPI-free level-1 handling of the icon swap: rotate instantly, only fade. */
 
 .primary-btn { height: 40px; padding: 0 22px; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-weight: 500; font-size: 15px }
 .mini-btn { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 12px; border-radius: 15px; background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 500; flex-shrink: 0 }
@@ -111,11 +120,11 @@ button:disabled { cursor: not-allowed }
 .menu-sep { height: 1px; background: var(--border); margin: 6px 0 }
 .menu-footer { padding: 8px 16px 4px; font-size: 12px; color: var(--muted) }
 .mini-switch { position: relative; margin-left: auto; width: 30px; height: 12px; border-radius: 6px; background: var(--switch-off); transition: background-color var(--dur-menu) ease }
-.mini-switch::after { content: ''; position: absolute; top: -4px; left: -2px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 2px solid var(--switch-off); transition: transform var(--dur-menu) var(--ease), border-color var(--dur-menu) ease }
+.mini-switch::after { content: ''; position: absolute; top: -4px; left: -2px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 2px solid var(--switch-off); transition: transform var(--dur-menu-move) var(--ease-menu), border-color var(--dur-menu) ease }
 .mini-switch.on { background: var(--accent) }
 .mini-switch.on::after { transform: translateX(14px); border-color: var(--accent) }
 
-.menu-pop-enter-active { transition: transform var(--dur-menu) var(--ease), opacity var(--dur-menu) ease }
+.menu-pop-enter-active { transition: transform var(--dur-menu-move) var(--ease-menu), opacity var(--dur-menu) ease }
 .menu-pop-leave-active { transition: transform calc(var(--dur-menu) * .7) ease-in, opacity calc(var(--dur-menu) * .7) ease-in }
 .menu-pop-enter-from, .menu-pop-leave-to { opacity: 0; transform: scale(.85) }
 
@@ -140,7 +149,7 @@ button:disabled { cursor: not-allowed }
 .folder.active { color: var(--accent) }
 .folder-badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; display: grid; place-items: center; background: var(--switch-off); color: #fff; font-size: 12px }
 .folder.active .folder-badge { background: var(--accent) }
-.folder-indicator { position: absolute; left: 0; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent); transition: transform var(--dur-menu) var(--ease), width var(--dur-menu) var(--ease) }
+.folder-indicator { position: absolute; left: 0; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent); transition: transform var(--dur-menu-move) var(--ease-menu), width var(--dur-menu) var(--ease-menu) }
 
 .chat-list { position: relative; flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 6px 8px 12px }
 .chat-entry { display: flex; align-items: center; gap: 12px; width: 100%; height: 72px; padding: 0 9px; border-radius: 12px; text-align: left; transition: background-color var(--dur-micro) ease }
@@ -150,7 +159,7 @@ button:disabled { cursor: not-allowed }
 .chat-entry.selected .chat-line small, .chat-entry.selected .chat-preview, .chat-entry.selected .list-check { color: inherit; opacity: .88 }
 .chat-entry.selected .unread-badge { background: #fff; color: var(--selected) }
 .chat-entry.selected .online-dot { border-color: var(--selected) }
-.chat-move { transition: transform var(--dur-sidebar) var(--ease) }
+.chat-move { transition: transform var(--dur-sidebar-move) var(--ease-sidebar) }
 /* filtered-out chats leave the flow at once so the remaining rows FLIP into place */
 .chat-leave-active { position: absolute; left: 8px; right: 8px; opacity: 0 }
 .empty-list { margin: 40px 16px; text-align: center; color: var(--muted); font-size: 14px }
@@ -170,7 +179,7 @@ button:disabled { cursor: not-allowed }
 .chat-preview.typing-text { color: var(--accent) }
 .chat-entry.selected .typing-text { color: inherit }
 .unread-badge { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; display: grid; place-items: center; background: var(--badge); color: #fff; font-size: 13px; font-weight: 500 }
-.badge-enter-active { transition: transform var(--dur-menu) var(--ease) }
+.badge-enter-active { transition: transform var(--dur-menu-move) var(--ease-menu) }
 .badge-leave-active { position: absolute; right: 0; transition: transform calc(var(--dur-menu) * .6) ease-in, opacity calc(var(--dur-menu) * .6) ease-in }
 .badge-enter-from, .badge-leave-to { transform: scale(0); opacity: 0 }
 
@@ -184,7 +193,7 @@ button:disabled { cursor: not-allowed }
 /* ---------- conversation ---------- */
 .conversation { position: relative; display: flex; flex-direction: column; min-width: 0; height: 100%; overflow: hidden; background: var(--wp-base) }
 .chat-wall { position: absolute; inset: 0; overflow: hidden; background: var(--wp-base); pointer-events: none }
-.blob { position: absolute; left: -10%; top: -10%; width: 120%; height: 120%; background: radial-gradient(closest-side, var(--c), transparent); transition: transform var(--dur-wallpaper) var(--ease) }
+.blob { position: absolute; left: -10%; top: -10%; width: 120%; height: 120%; background: radial-gradient(closest-side, var(--c), transparent); transition: transform var(--dur-wallpaper-move) var(--ease-wallpaper) }
 .blob-0 { --c: var(--wp-1) } .blob-1 { --c: var(--wp-2) } .blob-2 { --c: var(--wp-3) } .blob-3 { --c: var(--wp-4) }
 .wall-pattern { position: absolute; inset: 0; background-image: radial-gradient(var(--wp-dot) 1.3px, transparent 1.8px), radial-gradient(var(--wp-dot) 1.3px, transparent 1.8px); background-size: 30px 30px; background-position: 0 0, 15px 15px }
 
@@ -206,7 +215,7 @@ button:disabled { cursor: not-allowed }
 .message-list { display: flex; flex-direction: column; justify-content: flex-end; min-height: 100%; max-width: 760px; margin: 0 auto; padding: 8px 16px 10px }
 
 /* chat switch: direction follows the position in the chat list */
-.chat-next-enter-active, .chat-next-leave-active, .chat-prev-enter-active, .chat-prev-leave-active { transition: transform var(--dur-chat) var(--ease), opacity var(--dur-chat) ease }
+.chat-next-enter-active, .chat-next-leave-active, .chat-prev-enter-active, .chat-prev-leave-active { transition: transform var(--dur-chat-move) var(--ease-chat), opacity var(--dur-chat) ease }
 .chat-next-leave-active, .chat-prev-leave-active { pointer-events: none }
 .chat-next-enter-from, .chat-prev-leave-to { transform: translate3d(40px, 0, 0); opacity: 0 }
 .chat-next-leave-to, .chat-prev-enter-from { transform: translate3d(-40px, 0, 0); opacity: 0 }
@@ -260,14 +269,14 @@ button:disabled { cursor: not-allowed }
 
 /* message enter / pending flight */
 .message-row.flying .bubble, .message-row.flying .swipe-icon { visibility: hidden }
-.msg-enter-active { transition: transform var(--dur-incoming) var(--ease), opacity calc(var(--dur-incoming) * .6) ease-out }
+.msg-enter-active { transition: transform var(--dur-incoming-move) var(--ease-incoming), opacity calc(var(--dur-incoming) * .6) ease-out }
 .msg-enter-from.incoming, .msg-enter-from.mine:not(.flying) { opacity: 0; transform: translate3d(0, 18px, 0) scale(.94) }
 .message-list.no-enter .msg-enter-active { transition: none !important }
 .message-list.no-enter .msg-enter-from { opacity: 1 !important; transform: none !important }
 
 /* swipe to reply */
 .swipe-icon { position: absolute; right: 4px; top: 50%; margin-top: -15px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--day-bg); color: #fff; pointer-events: none; opacity: var(--swipe, 0); transform: scale(calc(.4 + var(--swipe, 0) * .6)) }
-.message-row:not(.swiping) .swipe-icon { transition: opacity var(--dur-menu) ease, transform var(--dur-menu) var(--ease) }
+.message-row:not(.swiping) .swipe-icon { transition: opacity var(--dur-menu) ease, transform var(--dur-menu-move) var(--ease-menu) }
 .message-row.swiping { user-select: none }
 .message-row.swipe-demo .swipe-icon { animation: swipe-icon calc(var(--dur-sidebar) * 2.4) var(--ease) }
 @keyframes swipe-icon { 0% { opacity: 0; transform: scale(.4) } 40%, 55% { opacity: 1; transform: scale(1) } 100% { opacity: 0; transform: scale(.4) } }
@@ -282,7 +291,7 @@ button:disabled { cursor: not-allowed }
 /* scroll-to-bottom button */
 .scroll-fab { position: absolute; right: 20px; bottom: 14px; z-index: 3; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); color: var(--muted); box-shadow: 0 1px 6px var(--bubble-shadow) }
 .scroll-fab .unread-badge { position: absolute; top: -6px; right: -2px }
-.fab-enter-active, .fab-leave-active { transition: transform var(--dur-menu) var(--ease), opacity var(--dur-menu) ease }
+.fab-enter-active, .fab-leave-active { transition: transform var(--dur-menu-move) var(--ease-menu), opacity var(--dur-menu) ease }
 .fab-enter-from, .fab-leave-to { opacity: 0; transform: translateY(20px) scale(.6) }
 
 /* ---------- composer ---------- */
@@ -300,7 +309,7 @@ button:disabled { cursor: not-allowed }
 .send-btn { flex: 0 0 54px; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); color: var(--accent); box-shadow: 0 1px 2px var(--bubble-shadow); transition: transform var(--dur-micro) var(--ease) }
 .send-btn > svg { grid-area: 1 / 1 }
 .send-btn:active { transform: scale(.92) }
-.icon-morph-enter-active, .icon-morph-leave-active { transition: transform var(--dur-menu) var(--ease), opacity var(--dur-menu) ease }
+.icon-morph-enter-active, .icon-morph-leave-active { transition: transform var(--dur-menu-move) var(--ease-menu), opacity var(--dur-menu) ease }
 .icon-morph-enter-from, .icon-morph-leave-to { opacity: 0; transform: scale(.3) rotate(-30deg) }
 .emoji-panel { position: absolute; z-index: 61; left: 0; bottom: calc(100% + 8px); width: min(340px, calc(100vw - 32px)); display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; padding: 8px; border-radius: 14px; background: var(--menu-bg); box-shadow: 0 4px 18px var(--menu-shadow), 0 0 0 1px var(--menu-ring); transform-origin: bottom left }
 .emoji-cell { height: 38px; border-radius: 8px; font-size: 24px; line-height: 1; transition: transform var(--dur-micro) var(--ease), background-color var(--dur-micro) ease }
@@ -323,12 +332,12 @@ button:disabled { cursor: not-allowed }
 .about-badges { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 18px 0 20px }
 .about-badges span { padding: 4px 10px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 500 }
 .modal-enter-active, .modal-leave-active { transition: opacity var(--dur-menu) ease }
-.modal-enter-active .about-modal, .modal-leave-active .about-modal { transition: transform var(--dur-menu) var(--ease) }
+.modal-enter-active .about-modal, .modal-leave-active .about-modal { transition: transform var(--dur-menu-move) var(--ease-menu) }
 .modal-enter-from, .modal-leave-to { opacity: 0 }
 .modal-enter-from .about-modal, .modal-leave-to .about-modal { transform: translateY(12px) scale(.92) }
 
 .toast-msg { position: fixed; z-index: 80; left: 50%; bottom: 96px; max-width: calc(100vw - 32px); padding: 10px 16px; border-radius: 10px; background: rgba(0, 0, 0, .8); color: #fff; font-size: 14px; pointer-events: none; transform: translateX(-50%) }
-.toast-enter-active, .toast-leave-active { transition: opacity var(--dur-menu) ease, transform var(--dur-menu) var(--ease) }
+.toast-enter-active, .toast-leave-active { transition: opacity var(--dur-menu) ease, transform var(--dur-menu-move) var(--ease-menu) }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translate(-50%, 10px) }
 
 .fps-meter { position: fixed; z-index: 90; left: 12px; bottom: 12px; padding: 6px 10px; border-radius: 10px; background: rgba(0, 0, 0, .75); color: #7cfc9a; font: 500 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; pointer-events: none }
@@ -351,6 +360,11 @@ button:disabled { cursor: not-allowed }
 .group-caption { display: flex; align-items: baseline; gap: 8px; margin: 8px 10px 6px; color: var(--accent); font-size: 15px; font-weight: 500 }
 .group-caption b { margin-left: auto; color: var(--muted); font-size: 14px; font-weight: 400 }
 .group-caption small { color: var(--muted); font-size: 13px; font-weight: 400 }
+.group-caption.sub { margin-top: 14px; font-size: 13.5px; color: var(--text); opacity: .85 }
+.group-caption .mini-btn { margin-left: auto; align-self: center }
+.slider-row.off { opacity: .5 }
+.config-io { display: block; width: calc(100% - 20px); margin: 4px 10px 8px; padding: 8px 10px; border: 0; border-radius: 10px; background: var(--surface-2); color: var(--text); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical }
+.config-io::placeholder { color: var(--muted) }
 .group-hint { margin: 6px 12px 8px; color: var(--muted); font-size: 13px; line-height: 1.45 }
 .banner { margin: 8px 10px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-size: 13px; line-height: 1.45 }
 
@@ -369,12 +383,12 @@ button:disabled { cursor: not-allowed }
 
 .toggle-row input, .radio-row input { position: absolute; opacity: 0; pointer-events: none }
 .switch { position: relative; flex: 0 0 34px; width: 34px; height: 14px; border-radius: 7px; background: var(--switch-off); transition: background-color var(--dur-menu) ease }
-.switch::after { content: ''; position: absolute; top: -3px; left: -2px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 2px solid var(--switch-off); transition: transform var(--dur-menu) var(--ease), border-color var(--dur-menu) ease }
+.switch::after { content: ''; position: absolute; top: -3px; left: -2px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 2px solid var(--switch-off); transition: transform var(--dur-menu-move) var(--ease-menu), border-color var(--dur-menu) ease }
 input:checked + .switch { background: var(--accent) }
 input:checked + .switch::after { transform: translateX(16px); border-color: var(--accent) }
 input:focus-visible + .switch, input:focus-visible + .radio { outline: 2px solid var(--accent); outline-offset: 4px }
 .radio { position: relative; flex: 0 0 20px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--switch-off); transition: border-color var(--dur-menu) ease }
-.radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); transform: scale(0); transition: transform var(--dur-menu) var(--ease) }
+.radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); transform: scale(0); transition: transform var(--dur-menu-move) var(--ease-menu) }
 input:checked + .radio { border-color: var(--accent) }
 input:checked + .radio::after { transform: scale(1) }
 .demo-play { flex: 0 0 30px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); transition: transform var(--dur-micro) var(--ease) }
@@ -465,10 +479,10 @@ input:checked + .radio::after { transform: scale(1) }
   /* Telegram mobile: chat list first, a chat pushes in from the right. */
   .workspace { display: block }
   .sidebar, .conversation { position: absolute; inset: 0; width: 100%; height: 100%; border: 0 }
-  .sidebar { transition: transform var(--dur-sidebar) var(--ease), visibility 0s linear 0s }
-  .conversation { visibility: hidden; transform: translate3d(100%, 0, 0); box-shadow: -2px 0 14px rgba(0, 0, 0, .12); transition: transform var(--dur-sidebar) var(--ease), visibility 0s linear var(--dur-sidebar) }
+  .sidebar { transition: transform var(--dur-sidebar-move) var(--ease-sidebar), filter var(--dur-sidebar-move) var(--ease-sidebar), visibility 0s linear 0s }
+  .conversation { visibility: hidden; transform: translate3d(100%, 0, 0); box-shadow: -2px 0 14px rgba(0, 0, 0, .12); transition: transform var(--dur-sidebar-move) var(--ease-sidebar), visibility 0s linear var(--dur-sidebar) }
   .mobile-chat-open .conversation { visibility: visible; transform: none; transition-delay: 0s }
-  .mobile-chat-open .sidebar { visibility: hidden; transform: translate3d(-25%, 0, 0); transition-delay: 0s, var(--dur-sidebar) }
+  .mobile-chat-open .sidebar { visibility: hidden; transform: translate3d(calc(-1 * var(--nav-parallax)), 0, 0); filter: brightness(var(--nav-dim)); transition-delay: 0s, 0s, var(--dur-sidebar) }
   .mobile-back { display: grid }
   .conversation-head { gap: 8px; padding: 0 4px 0 4px }
   .message-list { padding: 6px 8px 8px }
