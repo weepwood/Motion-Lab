@@ -25,6 +25,7 @@ test('workspace navigation, preview, presets, A/B, export and persistence',async
 test('layout reorder and mobile workspace',async({page})=>{
   await page.setViewportSize({width:390,height:844})
   await page.goto('/?workspace=1')
+  await page.getByRole('button',{name:'切换资源面板'}).click()
   await page.getByRole('button',{name:'FLIP 列表重排',exact:true}).click()
   const cards=page.locator('.ws-tiles .ws-object')
   await expect(cards.first()).toHaveText('1')
@@ -115,6 +116,10 @@ test('visual evidence and interactive pressure cleanup',async({page,browserName}
   await expect(page.locator('.ws-object')).toHaveCount(1)
   await page.getByRole('button',{name:'暂停',exact:true}).click()
   await page.setViewportSize({width:390,height:844})
+  await expect(page.getByRole('button',{name:'切换资源面板'})).toHaveAttribute('aria-pressed','false')
+  await expect(page.getByRole('button',{name:'切换检查器'})).toHaveAttribute('aria-pressed','false')
+  await expect(page.locator('.ws-nav')).not.toBeVisible()
+  await expect(page.locator('.ws-inspector')).not.toBeVisible()
   await page.screenshot({path:testInfo.outputPath(browserName+'-mobile.png'),fullPage:true})
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy()
 })
@@ -306,4 +311,64 @@ test('composition gesture recording, notification scene and visual evidence',asy
  await page.getByRole('button',{name:'结束录制'}).click()
  await expect.poll(async()=>page.evaluate(()=>{const data=JSON.parse(localStorage.getItem('motion-lab-composition-v1')||'[]');return data.find((t:any)=>t.config.effect==='drag')?.gesture?.length??0})).toBeGreaterThan(1)
  await page.screenshot({path:testInfo.outputPath(browserName+'-composition.png')})
+})
+
+test('measured layout tracks and combined project zip',async({page})=>{
+ await page.goto('/?workspace=1')
+ await page.getByRole('button',{name:'多轨道',exact:true}).click()
+ await page.getByRole('button',{name:'新增布局轨道'}).click()
+ const lane=page.locator('[data-composition-stage]');await expect(lane).toBeVisible();await lane.evaluate(el=>el.setAttribute('data-keep','yes'))
+ await page.getByLabel('编排时间轴').fill('160');await expect(lane).toHaveAttribute('data-keep','yes')
+ await page.getByRole('button',{name:'新增轨道',exact:true}).click()
+ await page.getByLabel('轨道动效').selectOption('shared')
+ await page.getByRole('button',{name:'组合预览',exact:true}).click()
+ const stage=page.locator('[data-composition-stage]')
+ await expect(stage.locator('[data-composition-track]')).toHaveCount(2)
+ await expect(stage.locator('[data-composition-item]')).toHaveCount(5)
+ // The earlier independent-track seek is at 160 ms; reset to the true start before
+ // comparing the same moved DOM item, not the first item in the final DOM order.
+ const timeline=page.getByLabel('编排时间轴')
+ await timeline.fill('0')
+ const moved=stage.locator('[data-composition-item="1"]').first()
+ await expect.poll(()=>moved.evaluate(el=>Number(el.getAnimations()[0]?.currentTime))).toBe(0)
+ const before=await moved.boundingBox()
+ if(!before)throw Error('missing initial layout geometry')
+ await timeline.fill('320')
+ await expect.poll(async()=>{const after=await moved.boundingBox();return after?Math.abs(before.x-after.x)+Math.abs(before.y-after.y):0}).toBeGreaterThan(10)
+ await expect.poll(()=>moved.evaluate(el=>Number(el.getAnimations()[0]?.currentTime))).toBe(320)
+ const [zip]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'编排 ZIP'}).click()])
+ const {readFile}=await import('node:fs/promises');const bytes=await readFile(await zip.path())
+ expect(bytes.includes(Buffer.from('Composition.vue'))).toBeTruthy()
+ expect(bytes.includes(Buffer.from('motion-kit/composition.js'))).toBeTruthy()
+})
+
+test('shared layout size and position survive repeated retargets',async({page})=>{
+ await page.goto('/?workspace=1')
+ const result=await page.evaluate(async()=>{
+  const {captureLayout,animateLayout,cancelLayout}=await import(/* @vite-ignore */ new URL('./packages/motion/index.js',location.href).href)
+  const el=document.createElement('div');el.style.cssText='position:fixed;left:10px;top:10px;width:50px;height:50px';document.body.append(el)
+  const opts={duration:500,physics:{mass:1,stiffness:180,damping:18}}
+  const jumps:number[]=[],slopeErrors:number[]=[]
+  try{
+   let before=captureLayout([el]);el.style.left='200px';el.style.width='100px';let a=animateLayout(before,opts)[0];a.pause()
+   for(let i=0;i<5;i++){
+    a.currentTime=100;const r=el.getBoundingClientRect();a.currentTime=101;const v=(el.getBoundingClientRect().width-r.width)*1000;a.currentTime=100
+    before=captureLayout([el]);el.style.left=String(80+i*17)+'px';el.style.width=String(65+i*15)+'px'
+    a=animateLayout(before,opts)[0];a.pause();a.currentTime=0;const next=el.getBoundingClientRect()
+    jumps.push(Math.abs(r.left-next.left)+Math.abs(r.width-next.width))
+    a.currentTime=1;const v2=(el.getBoundingClientRect().width-next.width)*1000;slopeErrors.push(Math.abs(v-v2))
+   }
+   a.currentTime=500;const final=el.getBoundingClientRect().width;cancelLayout([el]);return {jumps,slopeErrors,final,residual:el.getAnimations().length}
+  }finally{el.remove()}
+ })
+ expect(Math.max(...result.jumps)).toBeLessThan(1);expect(Math.max(...result.slopeErrors)).toBeLessThan(150);expect(result.final).toBeCloseTo(125);expect(result.residual).toBe(0)
+})
+test('mobile starts with preview and opens one side panel at a time',async({page,browserName},testInfo)=>{
+ await page.setViewportSize({width:390,height:844});await page.goto('/?workspace=1')
+ await expect(page.getByLabel('搜索动效')).not.toBeVisible()
+ await expect(page.getByRole('heading',{name:'滑动转场'})).toBeVisible()
+ await page.screenshot({path:testInfo.outputPath(browserName+'-mobile-focused.png'),fullPage:true})
+ await page.getByRole('button',{name:'切换资源面板'}).click();await expect(page.getByLabel('搜索动效')).toBeVisible()
+ await page.getByRole('button',{name:'切换检查器'}).click();await expect(page.getByLabel('搜索动效')).not.toBeVisible()
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy()
 })

@@ -9,6 +9,7 @@ import { vRipple } from './ripple'
 import { createChatData, PAGE, type Message, type Chat } from './chat/data'
 import { buildRows, dayDiff } from './chat/rows'
 import { useFps } from './chat/useFps'
+import { menuPosition } from './chat/menuPosition'
 import { createReplySwipe } from './chat/replySwipe'
 import { burst, cancelFlight, flyBubble, flyEmoji, revealFrom, play, settle } from './motion'
 import { createScrollSaver } from '../packages/motion/index.js'
@@ -486,20 +487,8 @@ function receive(chatId: number, content: string): number {
 
 const quickReactions = ['👍', '❤️', '🔥', '🥰', '👏', '😁', '🤔', '🎉']
 const emojiSet = ['😀', '😂', '🥰', '😎', '🤔', '😴', '👍', '👏', '🙏', '💪', '❤️', '💙', '🔥', '✨', '🎉', '🚀', '👀', '💯', '🌈', '☕', '🍰', '🎧', '📌', '✅']
-const MENU_W = 256
-const MENU_H = 232
+function openMsgMenu(id:number,x:number,y:number){closePopups();msgMenu.value=menuPosition(id,x,y)}
 
-function openMsgMenu(id: number, x: number, y: number) {
-  closePopups()
-  const pad = 8
-  let left = x + MENU_W + pad > innerWidth ? x - MENU_W : x
-  let top = y + MENU_H + pad > innerHeight ? y - MENU_H : y
-  left = Math.min(Math.max(pad, left), innerWidth - MENU_W - pad)
-  top = Math.min(Math.max(pad, top), innerHeight - MENU_H - pad)
-  const ox = Math.min(Math.max(0, x - left), MENU_W)
-  const oy = Math.min(Math.max(0, y - top), MENU_H)
-  msgMenu.value = { id, x: left, y: top, origin: `${ox}px ${oy}px` }
-}
 function onContext(e: MouseEvent, m: Message) {
   openMsgMenu(m.id, e.clientX, e.clientY)
 }

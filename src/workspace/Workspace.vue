@@ -17,7 +17,7 @@ import Preview from './Preview.vue'
 import CompositionPanel from './CompositionPanel.vue'
 const config=ref<Config>(defaults()), baseline=ref<Config|null>(null)
 const composition=ref(false),scene=ref<'object'|'interface'|'notification'>('interface')
-const {leftOpen,rightOpen,leftWidth,rightWidth,resizeStart,resizeMove,resizeEnd,resizeKey}=usePanelLayout()
+const {mobile,leftOpen,rightOpen,leftWidth,rightWidth,resizeStart,resizeMove,resizeEnd,resizeKey,toggleLeft,toggleRight}=usePanelLayout()
 const activeAsset=ref(''), status=ref(''), format=ref<Format>('JavaScript'), stress=ref(1)
 const {store,error,favorite,save,importText,rename,archive,purge}=useAssets()
 const title=computed(()=>catalog.find(x=>x.id===config.value.effect)?.title)
@@ -30,7 +30,7 @@ watch(config,()=>{pause();seek(Math.min(time.value,total.value))},{deep:true})
 function scrub(ms:number){pause();seek(ms)}
 function selectFrame(offset:number){selected.value=offset;rightOpen.value=true;inspector.value='parameters';scrub(offset*config.value.duration)}
 function moveFrame(from:number,to:number){if(!Number.isFinite(to))return;const offset=Math.round(Math.max(.01,Math.min(.99,to))*100)/100;const frame=config.value.frames.find(x=>x.offset===from);if(!frame||config.value.frames.some(x=>x!==frame&&x.offset===offset))return;frame.offset=offset;config.value.frames.sort((a,b)=>a.offset-b.offset);selectFrame(offset)}
-function choose(id:Effect){config.value=defaults(id);activeAsset.value='';stress.value=1;baseline.value=null;selected.value=null;scrub(0)}
+function choose(id:Effect){if(mobile.value)leftOpen.value=false;config.value=defaults(id);activeAsset.value='';stress.value=1;baseline.value=null;selected.value=null;scrub(0)}
 function apply(c:Config){config.value=sanitizeConfig(c);selected.value=null;baseline.value=null;stress.value=1;scrub(0)}
 function preset(i:number){const s=styles[i];config.value={...config.value,duration:s.duration,curve:[...s.curve],bounce:s.bounce}}
 const output=computed(()=>codeFor(config.value,format.value))
@@ -47,7 +47,7 @@ const {intervals,measuring,measure,perf}=useFrameMetrics()
 </script>
 <template>
  <main class="ws ws-adjustable" :class="{'ws-composing':composition,'ws-left-closed':!leftOpen,'ws-right-closed':!rightOpen||composition}" :style="{'--ws-left':leftWidth+'px','--ws-right':rightWidth+'px'}">
-  <header class="ws-top"><div><b>Motion Lab</b><span> / 交互动效工作台</span></div><nav><button :aria-pressed="leftOpen" aria-label="切换资源面板" @click="leftOpen=!leftOpen">资源</button><button :aria-pressed="rightOpen" aria-label="切换检查器" @click="rightOpen=!rightOpen">检查器</button><a href="./">聊天实验场</a><a href="./demo/">独立 Demo</a></nav></header>
+  <header class="ws-top"><div><b>Motion Lab</b><span> / 交互动效工作台</span></div><nav><button :aria-pressed="leftOpen" aria-label="切换资源面板" @click="toggleLeft">资源</button><button v-if="!composition" :aria-pressed="rightOpen" aria-label="切换检查器" @click="toggleRight">检查器</button><a href="./">聊天实验场</a><a href="./demo/">独立 Demo</a></nav></header>
   <WorkspaceLibrary v-show="leftOpen" :active="config.effect" :favorites="store.favorites" @choose="choose" @favorite="favorite" @preset="preset"/>
   <div v-if="leftOpen" class="ws-resizer ws-resizer-left" role="separator" aria-label="调整资源面板宽度" aria-orientation="vertical" :aria-valuenow="leftWidth" :aria-valuemin="180" :aria-valuemax="400" tabindex="0" @pointerdown="resizeStart($event,'left')" @pointermove="resizeMove" @pointerup="resizeEnd" @pointercancel="resizeEnd" @lostpointercapture="resizeEnd" @keydown="resizeKey($event,'left')"></div>
   <section class="ws-center"><div class="ws-mode-switch"><button :aria-pressed="!composition" @click="composition=false">单动效</button><button :aria-pressed="composition" @click="pause();composition=true">多轨道</button></div><CompositionPanel v-if="composition"/><template v-else><div class="ws-heading"><div><small>WORKSPACE / {{config.effect}}</small><h1>{{title}}</h1></div><button @click="baseline=baseline?null:sanitizeConfig(config);seek(0)">{{baseline?'关闭 A/B':'固定为 B 对比'}}</button></div>

@@ -1,7 +1,13 @@
-import {ref,watch} from 'vue'
+import {ref,watch,onMounted,onBeforeUnmount} from 'vue'
 type Side='left'|'right'
 export function usePanelLayout(){
- const leftOpen=ref(true),rightOpen=ref(true),leftWidth=ref(244),rightWidth=ref(326)
+ const mobile=ref(matchMedia('(max-width:760px)').matches)
+ const leftOpen=ref(!mobile.value),rightOpen=ref(!mobile.value),leftWidth=ref(244),rightWidth=ref(326)
+ const media=matchMedia('(max-width:760px)')
+ function responsive(){const next=media.matches;if(next===mobile.value)return;mobile.value=next;leftOpen.value=!next;rightOpen.value=!next}
+ onMounted(()=>{media.addEventListener('change',responsive);window.addEventListener('resize',responsive);responsive()});onBeforeUnmount(()=>{media.removeEventListener('change',responsive);window.removeEventListener('resize',responsive)})
+ function toggleLeft(){leftOpen.value=!leftOpen.value;if(mobile.value&&leftOpen.value)rightOpen.value=false}
+ function toggleRight(){rightOpen.value=!rightOpen.value;if(mobile.value&&rightOpen.value)leftOpen.value=false}
  const clamp=(side:Side,n:number)=>Math.max(side==='left'?180:240,Math.min(side==='left'?400:460,n))
  try{const raw=JSON.parse(localStorage.getItem('motion-lab-panels-v1')||'null');if(raw){if(typeof raw.left==='number'&&Number.isFinite(raw.left))leftWidth.value=clamp('left',raw.left);if(typeof raw.right==='number'&&Number.isFinite(raw.right))rightWidth.value=clamp('right',raw.right)}}catch{}
  watch([leftWidth,rightWidth],()=>{try{localStorage.setItem('motion-lab-panels-v1',JSON.stringify({left:leftWidth.value,right:rightWidth.value}))}catch{}},{flush:'post'})
@@ -11,5 +17,5 @@ export function usePanelLayout(){
  function resizeMove(e:PointerEvent){if(!drag||drag.id!==e.pointerId)return;target(drag.side).value=clamp(drag.side,drag.width+(e.clientX-drag.start)*(drag.side==='left'?1:-1))}
  function resizeEnd(e:PointerEvent){if(drag?.id===e.pointerId)drag=null}
  function resizeKey(e:KeyboardEvent,side:Side){if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;e.preventDefault();target(side).value=clamp(side,target(side).value+(e.key==='ArrowRight'?10:-10)*(side==='left'?1:-1))}
- return {leftOpen,rightOpen,leftWidth,rightWidth,resizeStart,resizeMove,resizeEnd,resizeKey}
+ return {mobile,leftOpen,rightOpen,leftWidth,rightWidth,resizeStart,resizeMove,resizeEnd,resizeKey,toggleLeft,toggleRight}
 }

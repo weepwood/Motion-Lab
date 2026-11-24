@@ -1,5 +1,5 @@
 import {computed,ref,watch} from 'vue'
-import {defaults,isTimeline,type Effect} from './model'
+import {defaults,type Effect} from './model'
 import {parseProject,trackLength,type Track,type Project} from './project'
 export type {Track} from './project'
 const key='motion-lab-composition-v1'
@@ -14,7 +14,7 @@ export function useComposition(){
  const total=computed(()=>Math.max(1,...tracks.value.map(t=>t.delay+trackLength(t))))
  const current=computed(()=>tracks.value.find(t=>t.id===active.value))
  const newId=()=>globalThis.crypto?.randomUUID?.()??String(Date.now())+'-'+seq++
- function add(effect:Effect='slide'){if(tracks.value.length>=24||(!isTimeline(effect)&&effect!=='drag'))return;const id=newId();tracks.value.push({id,name:'轨道 '+(tracks.value.length+1),delay:0,muted:false,config:defaults(effect),group:'',gesture:[]});active.value=id}
+ function add(effect:Effect='slide'){if(tracks.value.length>=24)return;const id=newId();tracks.value.push({id,name:'轨道 '+(tracks.value.length+1),delay:0,muted:false,config:defaults(effect),group:'',gesture:[]});active.value=id}
  function remove(id:string){tracks.value=tracks.value.filter(t=>t.id!==id);if(active.value===id)active.value=tracks.value[0]?.id??''}
  function reorder(id:string,delta:number){const i=tracks.value.findIndex(t=>t.id===id),j=i+delta;if(i<0||j<0||j>=tracks.value.length)return;const next=[...tracks.value];[next[i],next[j]]=[next[j],next[i]];tracks.value=next}
  function delay(t:Track,value:number){const n=clamp(value,0,10000);t.delay=snap.value?Math.min(10000,Math.round(n/snap.value)*snap.value):n}

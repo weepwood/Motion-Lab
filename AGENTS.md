@@ -74,3 +74,24 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - #9 Pages 部署 45401351606 成功。新增 SettingsPower、两轮 120 次重复 FLIP / Chromium CDP GC 后 heap 采样、编排与通知截图、手势轨道真实录制回归。版本设为 3.4.0-rc.1（package 与 lock 同步），正式 release 需满足 docs/release-checklist.md；候选暂未发布。
 
 - 物理布局首次动画保留配置的初始速度；只有有效运行中的物理动画才覆盖初速。面板捕获失败容错及轨道显示边界钳制。
+
+## V3.4.0 收口批次
+- #10 最新 CI 79/79、Vue/React 16 构建及运行、ZIP 22 条 CRC 全通过，合并提交 209df64。首轮截图 12 张，移动端仍偏长。30 次 FLIP P95 17.1/22/27 ms；两轮 120 次 P95 Chromium 17.8/18.0、Firefox 19/20、WebKit 19/17 ms，残留 0。Chromium GC 后 usedSize 4984408→5050792→5006920 字节；差异受运行器负载影响，不证明无泄漏。
+- 编排增加实时测量的内置 FLIP/共享元素场景与同一播放时钟的组合预览；mountComposition 被工作台与整体 HTML/Vue/React/ZIP 共用。不是任意外部 DOM 编排器。原 v1 存储兼容。
+
+- 物理 FLIP 继承实际像素宽高变化速度并按新目标几何归一化；普通 FLIP 仅对有效物理动画采集速度以减少额外分配。新增连续中断宽高/位置、移动端默认聚焦及实际组合工程构建运行门禁。
+- 移动端默认收起两侧，手动展开互斥；聊天菜单定位抽离。候选仍须完整 CI、最新截图/基准、部署验证后才创建正式 Release。
+
+- 收口分支将应用和 lockfile 版本同步为 3.4.0，属于待验证的发布提交；未创建正式 tag/Release。保持独立 motion-kit 的版本不变（未单独发布）。
+
+- 收口复查：独立布局轨道传递稳定对象而非逐帧新数组；组合运行时统一 ResizeObserver 与卸载清理，批量布局写入，物理动画 settle 后释放采样缓存。新增时间轴 seek 不重建 DOM 的回归。
+
+## PR #11 发布质量修复
+- 最新 CI 85/88，导出工程构建运行及 23+8 ZIP CRC 全通过。三浏览器共同失败为编排布局测试：独立预览先 seek 到 160ms，组合预览沿用此时间，原断言从中间态比较末态且选择最终 DOM 首元素。改为先 seek 0、验证动画实际时间、固定被移动对象并比较完整行程，保留 >10px 实际几何断言。等待完整复测，不提前发布。
+
+- #11 失败轮 15 张截图复查：首次移动端聚焦三浏览器均 844 CSS px；桌面动态缩小后 WebKit 截图仍展开面板。补充 resize 同步与卸载清理，仅在跨断点时重置面板，截图前必须验证 aria-pressed 及实际隐藏。
+- 失败轮基准：30 次 P95 Chromium 16.9、Firefox 18、WebKit 61ms；两轮120次 P95 分别17.1/17.6、20/20、17/17ms，残留 0。Chromium GC 后 usedSize 4992684→5071336→5028208 B（+35524 B，约0.71%），不证明无泄漏。短时 WebKit 尾延迟波动仍需观察，未把本轮视为稳定性能提升。
+
+- GitHub 连接器不支持直接创建 Tag/Release；增加仅主分支 push 完整 CI 成功、同 SHA Pages 成功、线上生产文件与已验收 dist 哈希一致及 Chromium 三入口/JSON 导入导出回归后执行的 V3.4.0 专用工作流。先创建 draft，下载资产校验 ZIP/SHA256 后公开，核对 tag SHA；不覆盖已发布版本。PR 分支不会执行发布。
+
+- 响应式修复 CI 45404101335：88/88，23+8 CRC，Vue/React 运行通过；15 张截图复查，WebKit 动态缩小 2078→964 CSS px，三浏览器首次移动聚焦 844px。120×2 P95 Chromium 17.2/18.3、Firefox 21/21、WebKit 26/18ms；GC heap 4979800→5073312→5028496 B（+48696，约0.98%），残留 0；30 次 WebKit P95 57ms，列为非阻塞观察项。发布门禁显式 GH_REPO，部署查询以 jq --arg 精确 SHA 过滤；CI 增加生产冒烟脚本语法校验。

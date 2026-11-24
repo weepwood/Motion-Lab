@@ -121,3 +121,6 @@ export declare function cancelLayout(elements: Iterable<Element>): void
 export declare function physicalSpringFrames(from:number,to:number,options?:{mass?:number;stiffness?:number;damping?:number;velocity?:number;duration?:number;samples?:number}):{offset:number;value:number}[]
 
 export declare function attachSpringDrag(el:HTMLElement,options?:{duration?:number;physics?:SpringPhysics;onRecord?:(samples:{t:number;x:number;y:number}[])=>void;onInterrupt?:()=>void}):()=>void
+
+export type CompositionTrack={id:string;name:string;effect:string;delay:number;duration:number;stagger:number;count:number;frames:Keyframe[];easing:string;physics?:SpringPhysics}
+export declare function mountComposition(root:HTMLElement,tracks:CompositionTrack[]):{seek:(ms:number)=>void;play:()=>void;pause:()=>void;dispose:()=>void;total:number;refresh:()=>void}

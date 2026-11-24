@@ -23,3 +23,5 @@ export { captureLayout, animateLayout, sharedElement, springFrames, staggerIn, c
 export { physicalSpringFrames } from './layout.js'
 
 export { attachSpringDrag } from './layout.js'
+
+export { mountComposition } from './composition.js'
