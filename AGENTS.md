@@ -91,3 +91,5 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 
 - #11 失败轮 15 张截图复查：首次移动端聚焦三浏览器均 844 CSS px；桌面动态缩小后 WebKit 截图仍展开面板。补充 resize 同步与卸载清理，仅在跨断点时重置面板，截图前必须验证 aria-pressed 及实际隐藏。
 - 失败轮基准：30 次 P95 Chromium 16.9、Firefox 18、WebKit 61ms；两轮120次 P95 分别17.1/17.6、20/20、17/17ms，残留 0。Chromium GC 后 usedSize 4992684→5071336→5028208 B（+35524 B，约0.71%），不证明无泄漏。短时 WebKit 尾延迟波动仍需观察，未把本轮视为稳定性能提升。
+
+- GitHub 连接器不支持直接创建 Tag/Release；增加仅主分支 push 完整 CI 成功、同 SHA Pages 成功、线上生产文件与已验收 dist 哈希一致及 Chromium 三入口/JSON 导入导出回归后执行的 V3.4.0 专用工作流。先创建 draft，下载资产校验 ZIP/SHA256 后公开，核对 tag SHA；不覆盖已发布版本。PR 分支不会执行发布。

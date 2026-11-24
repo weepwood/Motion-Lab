@@ -1,0 +1,109 @@
+name: Release V3.4.0
+on:
+  workflow_run:
+    workflows: [Build, typecheck and browser tests]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: release-v3.4.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository && github.repository == 'weepwood/Motion-Lab'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      TAG: v3.4.0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm exact main commit and version
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$SHA"
+          if [ "$(node -p "require('./package.json').version")" != "3.4.0" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          test "$(node -p "require('./package-lock.json').version")" = "3.4.0"
+          if gh release view "$TAG" --json isDraft --jq '.isDraft' > "$RUNNER_TEMP/release-state" 2>/dev/null; then
+            if [ "$(cat "$RUNNER_TEMP/release-state")" = false ]; then
+              echo "Release already exists; no overwrite."
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            test "$(gh release view "$TAG" --json targetCommitish --jq '.targetCommitish')" = "$SHA"
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+      - name: Wait for Pages deployment of this exact commit
+        if: steps.gate.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          for i in {1..60}; do
+            result=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml/runs" -f branch=main -f head_sha="$SHA" -f per_page=20 --jq '.workflow_runs | map(select(.head_sha == env.SHA)) | first | .conclusion // "pending"')
+            if [ "$result" = success ]; then exit 0; fi
+            if [ "$result" = failure ] || [ "$result" = cancelled ]; then echo "::error::Pages $result for $SHA"; exit 1; fi
+            sleep 5
+          done
+          echo "::error::No successful Pages deployment for $SHA"
+          exit 1
+      - name: Retrieve exact validated production artifact
+        if: steps.gate.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          gh run download "$RUN_ID" --name motion-lab-dist --dir "$RUNNER_TEMP/release-dist"
+          test -s "$RUNNER_TEMP/release-dist/index.html"
+          test -s "$RUNNER_TEMP/release-dist/demo/index.html"
+          test -s "$RUNNER_TEMP/release-dist/packages/motion/composition.js"
+      - name: Verify actual production bytes and browser interactions
+        if: steps.gate.outputs.publish == 'true'
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          node scripts/verify-production.mjs "$RUNNER_TEMP/release-dist" "$SHA"
+      - name: Package and verify release distribution
+        if: steps.gate.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/release-assets"
+          (cd "$RUNNER_TEMP/release-dist" && zip -q -r "$RUNNER_TEMP/release-assets/Motion-Lab-v3.4.0-web.zip" .)
+          cd "$RUNNER_TEMP/release-assets"
+          unzip -tq Motion-Lab-v3.4.0-web.zip
+          sha256sum Motion-Lab-v3.4.0-web.zip > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+      - name: Create draft, verify downloads, publish and verify tag
+        if: steps.gate.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$SHA"
+          cd "$RUNNER_TEMP/release-assets"
+          if gh release view "$TAG" --json isDraft --jq '.isDraft' > "$RUNNER_TEMP/release-state" 2>/dev/null; then
+            test "$(cat "$RUNNER_TEMP/release-state")" = true
+            test "$(gh release view "$TAG" --json targetCommitish --jq '.targetCommitish')" = "$SHA"
+            gh release upload "$TAG" Motion-Lab-v3.4.0-web.zip SHA256SUMS.txt --clobber
+          else
+            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" > /dev/null 2>&1; then echo "::error::Existing tag without release; refusing overwrite"; exit 1; fi
+            gh release create "$TAG" Motion-Lab-v3.4.0-web.zip SHA256SUMS.txt --target "$SHA" --draft --title "Motion Lab V3.4.0" --notes-file "$GITHUB_WORKSPACE/docs/release-v3.4.0.md"
+          fi
+          mkdir -p "$RUNNER_TEMP/release-download"
+          gh release download "$TAG" --pattern Motion-Lab-v3.4.0-web.zip --pattern SHA256SUMS.txt --dir "$RUNNER_TEMP/release-download"
+          (cd "$RUNNER_TEMP/release-download" && sha256sum -c SHA256SUMS.txt && unzip -tq Motion-Lab-v3.4.0-web.zip)
+          cmp SHA256SUMS.txt "$RUNNER_TEMP/release-download/SHA256SUMS.txt"
+          gh release edit "$TAG" --draft=false --latest
+          test "$(gh release view "$TAG" --json isDraft,isPrerelease --jq '.isDraft or .isPrerelease')" = false
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.sha')" = "$SHA"
+          gh release view "$TAG" --json url,tagName,assets
