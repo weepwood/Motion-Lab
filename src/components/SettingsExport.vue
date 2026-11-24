@@ -9,7 +9,8 @@ const framework=defineModel<Framework>('framework',{required:true})
 const implStyle=defineModel<ImplStyle>('style',{required:true})
 const exportAll=defineModel<boolean>('all',{required:true})
 const query=ref(''),view=ref<'prompt'|'details'>('prompt'),promptBox=ref<HTMLTextAreaElement|null>(null),closeButton=ref<HTMLButtonElement|null>(null)
-const copied=ref(false),copyStatus=ref('')
+const copied=ref(false),copyStatus=ref(''), output=ref<HTMLElement|null>(null)
+function jumpToOutput(){output.value?.scrollIntoView({block:'start',behavior:'instant'})}
 const groups: {name:string;ids:EffectId[]}[]=[
  {name:'消息交互',ids:['send','reaction','ripple','swipe','delete','enter']},
  {name:'界面转场',ids:['theme','push','chat','menu']},
@@ -78,8 +79,9 @@ function downloadPrompt(){
     <dl><div><dt>基础时长</dt><dd>{{settings.duration}} ms</dd></div><div><dt>有效动画等级</dt><dd>{{effectiveLevel}}</dd></div><div><dt>慢放倍数</dt><dd>{{settings.timeScale}}×</dd></div></dl>
     <p class="ae-help">左侧调整动画设置，右侧参数与提示词立即更新。</p>
    </section>
+   <button class="ae-button ae-jump" @click="jumpToOutput">查看生成结果</button>
   </div>
-  <div class="ae-output">
+  <div ref="output" class="ae-output">
    <div class="ae-output-heading"><div><p class="ae-kicker">生成结果 · {{shortFramework[framework]}}</p><h2>{{exportAll?'全套动效系统':selected?.title}}</h2><p class="ae-muted">{{exportAll?effects.length+' 个效果':'单个动效'}} · {{promptText.length.toLocaleString()}} 字符 · {{lines}} 行</p></div></div>
    <div class="ae-output-toolbar">
     <div class="ae-tabs" role="group" aria-label="输出视图"><button :aria-pressed="view==='prompt'" @click="view='prompt'"><FileCode2 :size="15"/> 提示词</button><button :aria-pressed="view==='details'" @click="view='details'"><ListFilter :size="15"/> 参数概览</button></div>
