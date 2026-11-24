@@ -100,3 +100,6 @@ npm run dev          # 然后访问 http://localhost:5173/demo/
 ## 许可
 
 MIT（本包） 。tweb 本身是 GPL-3.0，本包不包含其任何源代码。
+
+## 布局与弹簧
+`captureLayout(elements)` 在 DOM 更新前记录几何；更新后 `animateLayout(before, options)` 运行 FLIP。`sharedElement(source,target,options)` 以来源矩形映射目标。`springFrames(from,to,bounce)` 返回采样；`staggerIn(elements,options)` 执行延迟入场；`cancelLayout(elements)` 取消共享布局动画。调用方负责状态更新和节点生命周期。

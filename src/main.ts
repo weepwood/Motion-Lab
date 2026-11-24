@@ -1,5 +1,6 @@
-import { createApp } from 'vue'
+import { createApp, defineAsyncComponent } from 'vue'
 import App from './App.vue'
 import './style.css'
 
-createApp(App).mount('#app')
+const workspace = new URLSearchParams(location.search).has('workspace')
+createApp(workspace ? defineAsyncComponent(() => import('./workspace/Workspace.vue')) : App).mount('#app')

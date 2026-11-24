@@ -17,3 +17,5 @@ export { attachRipple } from './ripple.js'
 export { attachSwipe } from './gestures.js'
 export { createScrollSaver } from './scroll-saver.js'
 export { revealFrom } from './reveal.js'
+
+export { captureLayout, animateLayout, sharedElement, springFrames, staggerIn, cancelLayout } from './layout.js'

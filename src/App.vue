@@ -6,6 +6,8 @@ import {
   Smile, Sparkles, Trash2, X, Zap
 } from 'lucide-vue-next'
 import { vRipple } from './ripple'
+import { createChatData, MIN, PAGE, type Message, type Chat } from './chat/data'
+import { createReplySwipe } from './chat/replySwipe'
 import { burst, cancelFlight, flyBubble, flyEmoji, revealFrom, play, settle } from './motion'
 import { createScrollSaver } from '../packages/motion/index.js'
 import {
@@ -16,50 +18,11 @@ import {
 const SettingsPanel = defineAsyncComponent(() => import('./components/SettingsPanel.vue'))
 /* ------------------------------------------------------------------ data */
 
-type Message = { id: number; text: string; at: number; mine: boolean; reaction?: string; replyTo?: number }
-type Chat = { id: number; name: string; avatar: string; color: string; status: string; unread: number; group?: boolean; online?: boolean; saved?: boolean; pinned?: boolean }
-
-const MIN = 60_000
-const DAY_MIN = 1440
-const PAGE = 120
-const boot = Date.now()
-const ago = (minutes: number) => boot - minutes * MIN
-
+const { chats, data } = createChatData()
 /** tweb sweep maths: damped finger-following, trigger at a fraction of the cap. */
 const swipeMaxPx = () => settings.mech.swipeMax
 const swipeTriggerPx = () => Math.round(settings.mech.swipeMax * settings.mech.swipeTrigger)
 
-const chats = reactive<Chat[]>([
-  { id: 1, name: 'Motion Design', avatar: 'MD', color: '#5caffa', status: '128 位成员', unread: 0, group: true, pinned: true },
-  { id: 2, name: 'Alex Chen', avatar: 'AC', color: '#a695e7', status: '最近在线', unread: 0, online: true },
-  { id: 3, name: 'Product Team', avatar: 'PT', color: '#7bc862', status: '12 位成员', unread: 2, group: true },
-  { id: 4, name: '收藏夹', avatar: '', color: '#3390ec', status: '收藏的消息', unread: 0, saved: true },
-  { id: 5, name: 'UI Inspiration', avatar: 'UI', color: '#ee7aae', status: '最近在线', unread: 1 }
-])
-
-const data = reactive<Record<number, Message[]>>({
-  1: [
-    { id: 10, text: '昨天的结论：动效要服务于理解，而不是装饰。', at: ago(DAY_MIN + 95), mine: false },
-    { id: 11, text: '欢迎来到 Motion Lab！这里复刻了 Telegram 的微交互。', at: ago(18), mine: false },
-    { id: 12, text: '为什么 Telegram 的动画看起来这么自然？', at: ago(16), mine: true },
-    { id: 13, text: '秘诀不只是缓动曲线，更是连续的反馈、可中断的状态和精确的时间安排。', at: ago(15), mine: false },
-    { id: 14, text: '试试发送消息、右键气泡、向左滑动回复，或者双击气泡。', at: ago(15), mine: false, reaction: '🔥' },
-    { id: 15, text: '这就是我想要的丝滑感！', at: ago(12), mine: true, reaction: '❤️', replyTo: 13 }
-  ],
-  2: [
-    { id: 21, text: '嗨！刚调了几组不错的缓动参数。', at: ago(44), mine: false },
-    { id: 22, text: 'cubic-bezier(.23, 1, .32, 1) 在快速界面过渡中效果很好。', at: ago(43), mine: false },
-    { id: 23, text: '我去设置里对比一下 👀', at: ago(40), mine: true }
-  ],
-  3: [
-    { id: 31, text: '页面切换应该保持上下文，而不是突然跳到新界面。', at: ago(DAY_MIN + 180), mine: false },
-    { id: 32, text: '同意，我们先把基础动画做扎实。', at: ago(DAY_MIN + 176), mine: true },
-    { id: 33, text: '新的视觉稿已经准备好了。', at: ago(DAY_MIN + 20), mine: false },
-    { id: 34, text: '今晚一起过一遍？', at: ago(DAY_MIN + 19), mine: false }
-  ],
-  4: [{ id: 41, text: '动效原则：及时、连续、克制、可预测。', at: ago(3 * DAY_MIN), mine: true }],
-  5: [{ id: 51, text: '越快的响应，不代表越短的每一个动画。', at: ago(5 * DAY_MIN), mine: false }]
-})
 let nextId = 100
 
 const replies = ['收到 👍', '这个曲线确实更顺！', '再放慢 5 倍看看细节？', '弹簧预设很有意思 😄', '我这边也试一下', '👌 完美', '省电模式下也很流畅']
@@ -656,72 +619,11 @@ function onMsgLeave(el: Element, done: () => void) {
 
 /* ------------------------------------------------------------------ swipe to reply */
 
-let swipe: { id: number; pointer: number; x: number; y: number; dx: number; el: HTMLElement; row: HTMLElement | null; axis: 'pending' | 'x' | 'y'; armed: boolean } | null = null
-let pressTimer: ReturnType<typeof setTimeout> | undefined
-
-function startSwipe(e: PointerEvent, m: Message) {
-  if (swipe || e.isPrimary === false || e.button !== 0 || (e.target as HTMLElement).closest('button, .bubble-reply')) return
-  const el = e.currentTarget as HTMLElement
-  swipe = { id: m.id, pointer: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, el, row: el.closest<HTMLElement>('.message-row'), axis: 'pending', armed: false }
-  if (pressTimer) clearTimeout(pressTimer)
-  if (e.pointerType !== 'mouse') {
-    pressTimer = setTimeout(() => {
-      if (swipe?.id === m.id && swipe.axis === 'pending') {
-        const r = el.getBoundingClientRect()
-        openMsgMenu(m.id, r.left + r.width / 2, r.top + 16)
-        vibrate()
-        swipe = null
-      }
-    }, 480)
-  }
-}
-function moveSwipe(e: PointerEvent) {
-  const s = swipe
-  if (!s || s.pointer !== e.pointerId) return
-  const dx = e.clientX - s.x
-  const dy = e.clientY - s.y
-  if (s.axis === 'pending') {
-    if (Math.hypot(dx, dy) < 8) return
-    if (pressTimer) clearTimeout(pressTimer)
-    // tweb axis lock: |y| > 20px never becomes a reply; first |x| > |y| locks x permanently.
-    if (dx < 0 && Math.abs(dy) <= 20 && Math.abs(dx) > Math.abs(dy)) {
-      s.axis = 'x'
-      try { s.el.setPointerCapture(e.pointerId) } catch { /* pointer already released */ }
-      s.row?.classList.add('swiping')
-      window.getSelection()?.removeAllRanges()
-    } else {
-      swipe = null
-      return
-    }
-  }
-  if (s.axis !== 'x') return
-  e.preventDefault()
-  const max = swipeMaxPx()
-  const trigger = swipeTriggerPx()
-  const pull = Math.max(0, -dx)
-  // tweb: follow the finger up to MAX, then damp the surplus to 25% of movement.
-  const offset = pull <= max ? pull : max + (pull - max) * 0.25
-  s.dx = Math.min(offset, max + 48)
-  s.el.style.transform = `translate3d(${-s.dx}px,0,0)`
-  const progress = Math.min(1, s.dx / trigger)
-  s.row?.style.setProperty('--swipe', progress.toFixed(3))
-  if (pull >= trigger && !s.armed) { s.armed = true; vibrate() }
-  else if (pull < trigger) s.armed = false
-}
-function endSwipe(e: PointerEvent, m: Message) {
-  if (pressTimer) clearTimeout(pressTimer)
-  const s = swipe
-  if (!s || s.id !== m.id || s.pointer !== e.pointerId) return
-  swipe = null
-  const distance = s.dx
-  const trigger = swipeTriggerPx()
-  s.el.style.transform = ''
-  s.row?.classList.remove('swiping')
-  s.row?.style.removeProperty('--swipe')
-  if (!distance) return
-  play(s.el, [{ transform: `translate3d(${-distance}px,0,0)` }, { transform: 'translate3d(0,0,0)' }], durationFor('sidebar'), easingFor('sidebar'))
-  if (e.type === 'pointerup' && distance >= trigger) startReply(m)
-}
+const vReplySwipe = createReplySwipe<Message>({
+  onReply: startReply,
+  onLongPress: (m, x, y) => { openMsgMenu(m.id, x, y); vibrate() },
+  vibrate
+})
 function onDouble(m: Message) {
   window.getSelection()?.removeAllRanges()
   startReply(m)
@@ -871,13 +773,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
   timers.forEach(t => clearTimeout(t))
   timers.clear()
-  if (pressTimer) clearTimeout(pressTimer)
-  if (swipe) {
-    swipe.el.style.transform = ''
-    swipe.row?.classList.remove('swiping')
-    swipe.row?.style.removeProperty('--swipe')
-    swipe = null
-  }
   if (toastTimer) clearTimeout(toastTimer)
   cancelAnimationFrame(fpsRaf)
   cancelFlight()
@@ -1015,6 +910,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="head-spacer"></div>
           <button v-ripple class="icon-btn" aria-label="搜索会话" title="搜索 (Ctrl+K)" @click="openSearchFromHeader"><Search :size="22" /></button>
+          <a class="icon-btn" href="?workspace=1" aria-label="打开独立动效工作台" title="动效工作台"><FlaskConical :size="22" /></a>
           <button v-ripple class="icon-btn" aria-label="打开动效设置" title="动画与省电" @click="openSettings('animations')"><Settings2 :size="22" /></button>
           <div class="menu-anchor">
             <button v-ripple class="icon-btn" aria-label="更多" :aria-expanded="headerMenu" @click="headerMenu = !headerMenu"><MoreVertical :size="22" /></button>
@@ -1058,12 +954,7 @@ onBeforeUnmount(() => {
                       :class="{ 'has-tail': row.end, 'has-reaction': !!row.m.reaction }"
                       :data-mid="row.m.id"
                       @contextmenu.prevent="onContext($event, row.m)"
-                      @pointerdown="startSwipe($event, row.m)"
-                      @pointermove="moveSwipe"
-                      @pointerup="endSwipe($event, row.m)"
-                      @pointercancel="endSwipe($event, row.m)"
-                      @lostpointercapture="endSwipe($event, row.m)"
-                      @pointerleave="swipe?.axis === 'pending' && endSwipe($event, row.m)"
+                      v-reply-swipe="row.m"
                       @dblclick="onDouble(row.m)"
                     >
                       <div v-if="row.m.replyTo" class="bubble-reply" role="button" tabindex="0" @click.stop="jumpTo(row.m.replyTo)">

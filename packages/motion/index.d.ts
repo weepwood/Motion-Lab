@@ -84,6 +84,10 @@ export declare function attachSwipe(
     max?: number
     trigger?: number
     direction?: 'left' | 'right'
+    ignore?: string
+    onLock?: () => void
+    onReset?: () => void
+    onLongPress?: () => void
     onMove?: (state: { progress: number; distance: number }) => void
     onEnd?: (state: { distance: number; triggered: boolean }) => void
     returnEasing?: string
@@ -104,3 +108,11 @@ export declare function revealFrom(opts: {
   easing?: string
   apply: () => void | Promise<void>
 }): Promise<void>
+
+export type LayoutOptions = { duration?: number; easing?: string }
+export declare function captureLayout(elements: Iterable<Element>): Map<Element, DOMRect>
+export declare function animateLayout(before: Map<Element, DOMRect>, options?: LayoutOptions): Animation[]
+export declare function sharedElement(source: Element, target: Element, options?: LayoutOptions): Animation[]
+export declare function springFrames(from: number, to: number, bounce?: number, samples?: number): { offset: number; value: number }[]
+export declare function staggerIn(elements: Iterable<Element>, options?: LayoutOptions & { stagger?: number; distance?: number }): Animation[]
+export declare function cancelLayout(elements: Iterable<Element>): void

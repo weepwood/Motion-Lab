@@ -37,43 +37,50 @@ const DAMPING = 0.25
  * @returns {() => void} detach
  */
 export function attachSwipe(el, opts = {}) {
-  const max = opts.max ?? 64
-  const triggerPx = Math.max(8, (opts.max ?? 64) * (opts.trigger ?? 0.75))
+  const max = () => opts.max ?? 64
+  const triggerPx = () => Math.max(8, Math.round(max() * (opts.trigger ?? 0.75)))
   const dir = opts.direction === 'right' ? 1 : -1
   let s = null
   let snap = null
+  let pressTimer
+  const clearPress = () => { clearTimeout(pressTimer); pressTimer = undefined }
   const down = e => {
     if (s || e.isPrimary === false) return
     if (e.button !== undefined && e.button !== 0) return
-    if (e.target.closest?.('button, a, input, textarea')) return
+    if (e.target.closest?.(opts.ignore ?? 'button, a, input, textarea')) return
     snap?.cancel()
     snap = null
     s = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, locked: false, dead: false, transform: el.style.transform }
+    if (e.pointerType !== 'mouse' && opts.onLongPress) pressTimer = setTimeout(() => { if (s && !s.locked) { clean(); opts.onLongPress() } }, 480)
   }
   const move = e => {
     if (!s || s.id !== e.pointerId || s.dead) return
     const dx = e.clientX - s.x
     const dy = e.clientY - s.y
     if (!s.locked) {
+      if (Math.hypot(dx, dy) >= 8) clearPress()
       if (Math.abs(dy) > AXIS_ABORT_Y) { s.dead = true; clean(); return }
       if (Math.hypot(dx, dy) > 8 && Math.abs(dx) > Math.abs(dy) && dx * dir > 0) {
         s.locked = true
+        opts.onLock?.()
         try { el.setPointerCapture(e.pointerId) } catch { /* ok */ }
         e.preventDefault?.()
-      } else return
+      } else if (Math.hypot(dx, dy) > 8) { clean(); return } else return
     }
     const pull = dir === -1 ? Math.max(0, -dx) : Math.max(0, dx)
     // damped follow: 1:1 up to max, then 25% of the surplus
-    const offset = pull <= max ? pull : max + (pull - max) * DAMPING
-    const distance = Math.min(offset, max + 48)
+    const cap = max()
+    const offset = pull <= cap ? pull : cap + (pull - cap) * DAMPING
+    const distance = Math.min(offset, cap + 48)
+    e.preventDefault?.()
     s.dx = distance
     el.style.transform = `translate3d(${distance * dir}px,0,0)`
-    opts.onMove?.({ progress: Math.min(1, distance / triggerPx), distance })
+    opts.onMove?.({ progress: Math.min(1, distance / triggerPx()), distance })
   }
   const up = e => {
     if (!s || s.id !== e.pointerId || s.dead) return
     const distance = s.dx
-    const triggered = distance >= triggerPx && e.type === 'pointerup'
+    const triggered = distance >= triggerPx() && e.type === 'pointerup'
     const state = s
     clean()
     if (!state.locked) return
@@ -86,8 +93,10 @@ export function attachSwipe(el, opts = {}) {
   }
   function clean() {
     if (!s) return
+    clearPress()
     const state = s
     s = null
+    opts.onReset?.()
     el.style.transform = state.transform
     try { if (el.hasPointerCapture(state.id)) el.releasePointerCapture(state.id) } catch { /* already released */ }
   }

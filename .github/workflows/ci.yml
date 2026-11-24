@@ -13,13 +13,13 @@ jobs:
         with:
           node-version: '22'
       - name: Install
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: CI gate 1 · motion-kit import smoke
         run: npm run check:pkg
       - name: Typecheck and build (stages demo into dist/)
         run: npm run build
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium firefox webkit
       - name: CI gate 2+3 · app and demo interaction tests (console-clean)
         run: npm run test:e2e
       - name: Upload diagnostics
