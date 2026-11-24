@@ -151,3 +151,22 @@ test('timeline marker drag and full export zip',async({page})=>{
   expect(bytes.includes(Buffer.from('motion-kit/index.js'))).toBeTruthy()
   expect(bytes.includes(Buffer.from('index.html'))).toBeTruthy()
 })
+
+test('physical spring has finite endpoints and gesture replay cleans up',async({page})=>{
+ await page.goto('/?workspace=1')
+ const result=await page.evaluate(async()=>{
+   const url=new URL('./packages/motion/index.js',location.href).href
+   const {physicalSpringFrames}=await import(/* @vite-ignore */ url)
+   return [8,26.83281573,60].map(damping=>{const f=physicalSpringFrames(100,0,{mass:1,stiffness:180,damping,velocity:-200,duration:500});return {first:f[0].value,last:f.at(-1).value,finite:f.every(x=>Number.isFinite(x.value))}})
+ })
+ for(const item of result){expect(item.first).toBeCloseTo(100);expect(item.last).toBe(0);expect(item.finite).toBeTruthy()}
+ await page.getByRole('button',{name:'拖拽与复位',exact:true}).click()
+ const el=page.locator('.ws-object').first();await expect(el).toBeVisible()
+ const box=await el.boundingBox();if(!box)throw Error('drag preview missing')
+ await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down()
+ await page.mouse.move(box.x+box.width/2+40,box.y+box.height/2,{steps:5});await page.mouse.up()
+ await expect(page.getByRole('button',{name:'回放手势'})).toBeEnabled()
+ await page.getByRole('button',{name:'回放手势'}).click()
+ await page.getByRole('button',{name:'滑动转场',exact:true}).click()
+ await expect(page.locator('.ws-gesture-controls')).toHaveCount(0)
+})

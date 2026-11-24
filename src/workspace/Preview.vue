@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
-import { animateLayout, captureLayout, drag, cancelLayout, play } from '../../packages/motion/index.js'
+import { animateLayout, captureLayout, drag, cancelLayout, play, physicalSpringFrames } from '../../packages/motion/index.js'
 import { keyframes, easingOf, isTimeline, type Config } from './model'
-import { createGestureRecording, gestureFrames, type GestureSample } from './gestureRecording'
+import { createGestureRecording, gestureFrames, releaseVelocity, type GestureSample } from './gestureRecording'
 const props=defineProps<{ config: Config; time: number; label: string; stress: number }>()
 const root=ref<HTMLElement|null>(null), order=ref([1,2,3,4]), expanded=ref(false)
 let animations:Animation[]=[], detach:(()=>void)|undefined, generation=0
@@ -22,7 +22,28 @@ async function prepare(){const token=++generation;clear();await nextTick();if(to
    }
    seek()
  } else if(props.config.effect==='drag'){
-   const el=objects()[0];if(el){dragged=el;let baseX=0,baseY=0;detach=drag(el,{onStart:()=>{el.getAnimations().forEach(a=>a.cancel());baseX=0;baseY=0;recordingPlayback?.cancel();recorder.begin()},onUpdate:({dx,dy})=>{baseX=dx;baseY=dy;recorder.add(dx,dy);el.style.transform='translate('+dx+'px,'+dy+'px)'},onEnd:()=>{recorded.value=recorder.finish();el.style.transform='';if(!matchMedia('(prefers-reduced-motion: reduce)').matches)dragReturn=play(el,[{transform:'translate('+baseX+'px,'+baseY+'px)'},{transform:'none'}],props.config.duration,easingOf(props.config))}})}
+   const el=objects()[0];if(el){dragged=el;let baseX=0,baseY=0,originX=0,originY=0;detach=drag(el,{
+     onStart:()=>{
+       const value=getComputedStyle(el).transform
+       const matrix=value==='none'?new DOMMatrixReadOnly():new DOMMatrixReadOnly(value)
+       originX=baseX=matrix.m41;originY=baseY=matrix.m42
+       el.getAnimations().forEach(a=>a.cancel())
+       el.style.transform='translate('+baseX+'px,'+baseY+'px)'
+       recorder.begin(baseX,baseY)
+     },
+     onUpdate:({dx,dy})=>{
+       baseX=originX+dx;baseY=originY+dy;recorder.add(baseX,baseY)
+       el.style.transform='translate('+baseX+'px,'+baseY+'px)'
+     },
+     onEnd:()=>{
+       recorded.value=recorder.finish();el.style.transform=''
+       if(matchMedia('(prefers-reduced-motion: reduce)').matches)return
+       const velocity=releaseVelocity(recorded.value),opts={duration:props.config.duration}
+       const xs=physicalSpringFrames(baseX,0,{...opts,velocity:velocity.x})
+       const ys=physicalSpringFrames(baseY,0,{...opts,velocity:velocity.y})
+       dragReturn=play(el,xs.map((x,i)=>({offset:x.offset,transform:'translate('+x.value+'px,'+ys[i].value+'px)'})),props.config.duration,'linear')
+     }
+   })}
  }
 }
 function replayGesture(){const el=objects()[0];if(!el||recorded.value.length<2||matchMedia('(prefers-reduced-motion: reduce)').matches)return;dragReturn?.cancel();recordingPlayback?.cancel();recordingPlayback=play(el,gestureFrames(recorded.value),Math.max(1,recorded.value.at(-1)?.t??0),'linear');}
