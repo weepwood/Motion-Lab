@@ -38,3 +38,7 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - 时间轴：循环、速度、轨道刻度、A/B、关键帧定位和方向键移动；静态预览可控，布局/拖拽仍由真实 DOM 操作。
 - JS/Vue/React 的布局/手势导出生成可接入的 mount/dispose 示例，需将 packages/motion 拷贝至 ./motion-kit（或修改导入路径）；CSS 仅布局样式不模拟真实手势。已补充导出 JavaScript 真实挂载、布局重排、拖动及卸载浏览器测试；Vue/React 独立项目构建仍未执行。
 - 资产新建后立即绑定版本 ID；存储键保持不变。无真实截图视觉验收或跨浏览器最终结果之前不得宣称已发布。
+
+## 专业工具增强批次（依赖 PR #7）
+- 拖动关键帧、手势录制与单次回放、资产重命名/软删除/恢复/批量、同类型版本 A/B、物理弹簧采样、独立 HTML 导出；新增 AssetPanel 拆分。
+- HTML 内联 ESM 依赖源码，需实际运行验证；Vue/React 独立项目构建与 ZIP 包仍待完成。截图由 CI 采集，不等于人工视觉验收；性能指标是 rAF 估算而非 GPU/内存基准。保留旧存储键与已有资产。

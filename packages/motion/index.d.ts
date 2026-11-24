@@ -116,3 +116,5 @@ export declare function sharedElement(source: Element, target: Element, options?
 export declare function springFrames(from: number, to: number, bounce?: number, samples?: number): { offset: number; value: number }[]
 export declare function staggerIn(elements: Iterable<Element>, options?: LayoutOptions & { stagger?: number; distance?: number }): Animation[]
 export declare function cancelLayout(elements: Iterable<Element>): void
+
+export declare function physicalSpringFrames(from:number,to:number,options?:{mass?:number;stiffness?:number;damping?:number;velocity?:number;duration?:number;samples?:number}):{offset:number;value:number}[]

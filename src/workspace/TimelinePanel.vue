@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Play, Pause, SkipBack, StepBack, StepForward, Repeat2 } from 'lucide-vue-next'
 import { isTimeline, type Config } from './model'
 const props=defineProps<{config:Config;baseline:Config|null;time:number;total:number;playing:boolean;speed:number;loop:boolean;selected:number|null}>()
 const emit=defineEmits<{seek:[number];toggle:[];speed:[number];loop:[boolean];select:[number];move:[number,number]}>()
+const dragging=ref<{offset:number;preview:number;id:number;left:number;width:number}|null>(null)
+function startDrag(e:PointerEvent,offset:number){if(e.button!==0||!props.config.duration)return;const el=e.currentTarget as HTMLElement;const r=el.parentElement!.getBoundingClientRect();dragging.value={offset,preview:offset,id:e.pointerId,left:r.left,width:r.width};el.setPointerCapture(e.pointerId);emit('select',offset)}
+function dragMarker(e:PointerEvent){const d=dragging.value;if(!d||d.id!==e.pointerId||!d.width)return;d.preview=Math.round(Math.max(.01,Math.min(.99,(e.clientX-d.left)/d.width*props.total/props.config.duration))*100)/100}
+function finishDrag(e:PointerEvent,commit:boolean){const d=dragging.value;if(!d||d.id!==e.pointerId)return;dragging.value=null;if(commit&&d.preview!==d.offset)emit('move',d.offset,d.preview)}
+const markerOffset=(offset:number)=>dragging.value?.offset===offset?dragging.value.preview:offset
 const enabled=computed(()=>isTimeline(props.config.effect))
 const percent=(ms:number)=>Math.max(0,Math.min(100,props.total?ms/props.total*100:0))
 const ticks=computed(()=>Array.from({length:5},(_,i)=>Math.round(props.total*i/4)))
@@ -30,7 +35,7 @@ function move(e:KeyboardEvent,offset:number){if(e.key!=='ArrowLeft'&&e.key!=='Ar
       <div class="ws-track" @click="scrub">
         <i :style="{width:percent(lane.duration)+'%'}"></i>
         <span v-if="lane.effect==='stagger'" v-for="n in 3" :key="n" class="ws-stagger-bar" :style="{left:percent(n*lane.stagger)+'%',width:percent(lane.duration)+'%',top:(n*4+3)+'px'}"></span>
-        <button v-if="!index" v-for="frame in lane.frames" :key="frame.offset" class="ws-key-marker" :class="{selected:selected===frame.offset}" :style="{left:percent(frame.offset*lane.duration)+'%'}" :aria-label="'关键帧 '+Math.round(frame.offset*100)+'%'" title="点击定位；方向键移动关键帧" @click.stop="emit('select',frame.offset)" @keydown="move($event,frame.offset)">◆</button>
+        <button v-if="!index" v-for="frame in lane.frames" :key="frame.offset" class="ws-key-marker" :class="{selected:selected===frame.offset}" :style="{left:percent(markerOffset(frame.offset)*lane.duration)+'%'}" :aria-label="'关键帧 '+Math.round(frame.offset*100)+'%'" title="拖动或方向键移动关键帧" @pointerdown.stop="startDrag($event,frame.offset)" @pointermove="dragMarker" @pointerup.stop="finishDrag($event,true)" @pointercancel="finishDrag($event,false)" @lostpointercapture="finishDrag($event,false)" @click.stop="emit('select',frame.offset)" @keydown="move($event,frame.offset)">◆</button>
         <span class="ws-playhead" :style="{left:percent(time)+'%'}"></span>
       </div>
     </div>

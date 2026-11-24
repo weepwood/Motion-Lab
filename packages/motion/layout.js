@@ -43,3 +43,17 @@ export function staggerIn(elements, { duration = 300, stagger = 45, distance = 1
 export function cancelLayout(elements) {
   for (const el of elements) running.get(el)?.cancel()
 }
+
+/** Analytic damped oscillator, velocity in units/s, duration in ms. Last sample snaps to target for finite previews. */
+export function physicalSpringFrames(from,to,{mass=1,stiffness=180,damping=18,velocity=0,duration=500,samples=60}={}){
+  const m=Math.max(.01,mass),k=Math.max(.01,stiffness),c=Math.max(0,damping)
+  const w=Math.sqrt(k/m),a=c/(2*m),x=from-to,v=velocity
+  const count=Math.max(2,Math.min(240,Math.round(samples)))
+  function position(t){
+    if(Math.abs(a-w)<1e-6)return Math.exp(-a*t)*(x+(v+a*x)*t)
+    if(a<w){const b=Math.sqrt(w*w-a*a);return Math.exp(-a*t)*(x*Math.cos(b*t)+(v+a*x)/b*Math.sin(b*t))}
+    const b=Math.sqrt(a*a-w*w),r1=-a+b,r2=-a-b,A=(v-r2*x)/(r1-r2)
+    return A*Math.exp(r1*t)+(x-A)*Math.exp(r2*t)
+  }
+  return Array.from({length:count+1},(_,i)=>({offset:i/count,value:i===count?to:to+position(Math.max(0,duration)/1000*i/count)}))
+}

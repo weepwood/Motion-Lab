@@ -2,12 +2,15 @@
 import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { animateLayout, captureLayout, drag, cancelLayout, play } from '../../packages/motion/index.js'
 import { keyframes, easingOf, isTimeline, type Config } from './model'
+import { createGestureRecording, gestureFrames, type GestureSample } from './gestureRecording'
 const props=defineProps<{ config: Config; time: number; label: string; stress: number }>()
 const root=ref<HTMLElement|null>(null), order=ref([1,2,3,4]), expanded=ref(false)
 let animations:Animation[]=[], detach:(()=>void)|undefined, generation=0
+const recorded=ref<GestureSample[]>([]), recorder=createGestureRecording()
+let recordingPlayback:Animation|null=null
 let dragged: HTMLElement | undefined
 let dragReturn: Animation | null = null
-function clear(){animations.forEach(a=>a.cancel());animations=[];detach?.();detach=undefined;dragReturn?.cancel();dragReturn=null;if(dragged){dragged.style.transform='';dragged=undefined}if(root.value)cancelLayout(root.value.querySelectorAll('.ws-object'))}
+function clear(){recordingPlayback?.cancel();recordingPlayback=null;animations.forEach(a=>a.cancel());animations=[];detach?.();detach=undefined;dragReturn?.cancel();dragReturn=null;if(dragged){dragged.style.transform='';dragged=undefined}if(root.value)cancelLayout(root.value.querySelectorAll('.ws-object'))}
 function objects(){return Array.from(root.value?.querySelectorAll<HTMLElement>('.ws-object')??[])}
 function seek(){for(const a of animations)a.currentTime=props.time}
 async function prepare(){const token=++generation;clear();await nextTick();if(token!==generation)return
@@ -19,9 +22,10 @@ async function prepare(){const token=++generation;clear();await nextTick();if(to
    }
    seek()
  } else if(props.config.effect==='drag'){
-   const el=objects()[0];if(el){dragged=el;let baseX=0,baseY=0;detach=drag(el,{onStart:()=>{el.getAnimations().forEach(a=>a.cancel());baseX=0;baseY=0},onUpdate:({dx,dy})=>{baseX=dx;baseY=dy;el.style.transform='translate('+dx+'px,'+dy+'px)'},onEnd:()=>{el.style.transform='';if(!matchMedia('(prefers-reduced-motion: reduce)').matches)dragReturn=play(el,[{transform:'translate('+baseX+'px,'+baseY+'px)'},{transform:'none'}],props.config.duration,easingOf(props.config))}})}
+   const el=objects()[0];if(el){dragged=el;let baseX=0,baseY=0;detach=drag(el,{onStart:()=>{el.getAnimations().forEach(a=>a.cancel());baseX=0;baseY=0;recordingPlayback?.cancel();recorder.begin()},onUpdate:({dx,dy})=>{baseX=dx;baseY=dy;recorder.add(dx,dy);el.style.transform='translate('+dx+'px,'+dy+'px)'},onEnd:()=>{recorded.value=recorder.finish();el.style.transform='';if(!matchMedia('(prefers-reduced-motion: reduce)').matches)dragReturn=play(el,[{transform:'translate('+baseX+'px,'+baseY+'px)'},{transform:'none'}],props.config.duration,easingOf(props.config))}})}
  }
 }
+function replayGesture(){const el=objects()[0];if(!el||recorded.value.length<2||matchMedia('(prefers-reduced-motion: reduce)').matches)return;dragReturn?.cancel();recordingPlayback?.cancel();recordingPlayback=play(el,gestureFrames(recorded.value),Math.max(1,recorded.value.at(-1)?.t??0),'linear');}
 async function replay(){
  if(!root.value)return
  const before=captureLayout(objects())
@@ -41,6 +45,7 @@ defineExpose({replay})
   <div v-else class="ws-objects" :class="{many: config.effect==='stagger'||stress>1}">
     <div v-for="i in config.effect==='stagger'?4:stress" :key="i" class="ws-object" :class="{draggable:config.effect==='drag'}">{{config.effect==='drag'?'拖动':stress>1?i:''}}</div>
   </div>
+  <div v-if="config.effect==='drag'" class="ws-gesture-controls"><button :disabled="recorded.length<2" @click="replayGesture">回放手势</button><small>{{recorded.length}} 个采样点</small></div>
   <button v-if="config.effect==='flip'||config.effect==='shared'" class="ws-action" @click="replay">执行布局转场</button>
  </section>
 </template>
