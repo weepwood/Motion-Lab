@@ -109,7 +109,8 @@ export declare function revealFrom(opts: {
   apply: () => void | Promise<void>
 }): Promise<void>
 
-export type LayoutOptions = { duration?: number; easing?: string }
+export type SpringPhysics = {mass?:number;stiffness?:number;damping?:number;velocity?:number}
+export type LayoutOptions = { duration?: number; easing?: string; physics?:SpringPhysics }
 export declare function captureLayout(elements: Iterable<Element>): Map<Element, DOMRect>
 export declare function animateLayout(before: Map<Element, DOMRect>, options?: LayoutOptions): Animation[]
 export declare function sharedElement(source: Element, target: Element, options?: LayoutOptions): Animation[]
@@ -119,4 +120,4 @@ export declare function cancelLayout(elements: Iterable<Element>): void
 
 export declare function physicalSpringFrames(from:number,to:number,options?:{mass?:number;stiffness?:number;damping?:number;velocity?:number;duration?:number;samples?:number}):{offset:number;value:number}[]
 
-export declare function attachSpringDrag(el:HTMLElement,options?:{duration?:number;onRecord?:(samples:{t:number;x:number;y:number}[])=>void;onInterrupt?:()=>void}):()=>void
+export declare function attachSpringDrag(el:HTMLElement,options?:{duration?:number;physics?:SpringPhysics;onRecord?:(samples:{t:number;x:number;y:number}[])=>void;onInterrupt?:()=>void}):()=>void

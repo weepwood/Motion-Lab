@@ -19,7 +19,8 @@ export function parseProject(raw:unknown):Project{
 export function trackLength(t:Track){return t.config.effect==='drag'?t.config.duration:timelineLength(t.config)}
 export function trackFrames(t:Track):Keyframe[]{
  if(t.config.effect!=='drag')return keyframes(t.config)
- const frames=gestureFrames(t.gesture??[])
+ const samples=t.gesture??[],start=samples[0]?.t??0
+ const frames=gestureFrames(samples.map(s=>({...s,t:s.t-start})))
  return frames.length>=2?frames:[{offset:0,transform:'none'},{offset:1,transform:'none'}]
 }
 export function projectHtml(project:Project){

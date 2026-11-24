@@ -21,15 +21,15 @@ async function prepare(){const token=++generation;clear();await nextTick();if(to
    }
    seek()
  } else if(props.config.effect==='drag'){
-   const el=objects()[0];if(el){dragged=el;detach=attachSpringDrag(el,{duration:props.config.duration,onRecord:samples=>{recorded.value=samples},onInterrupt:()=>recordingPlayback?.cancel()})}
+   const el=objects()[0];if(el){dragged=el;detach=attachSpringDrag(el,{duration:props.config.duration,physics:props.config.physics,onRecord:samples=>{recorded.value=samples},onInterrupt:()=>recordingPlayback?.cancel()})}
  }
 }
 function replayGesture(){const el=objects()[0];if(!el||recorded.value.length<2||matchMedia('(prefers-reduced-motion: reduce)').matches)return;el.getAnimations().forEach(a=>a.cancel());recordingPlayback=play(el,gestureFrames(recorded.value),Math.max(1,recorded.value.at(-1)?.t??0),'linear');}
 async function replay(){
  if(!root.value)return
  const before=captureLayout(objects())
- if(props.config.effect==='flip'){order.value=[...order.value.slice(1),order.value[0]];await nextTick();animateLayout(before,{duration:props.config.duration,easing:easingOf(props.config)})}
- if(props.config.effect==='shared'){const source=objects()[0];if(!source)return;const rect=source.getBoundingClientRect();expanded.value=!expanded.value;await nextTick();const target=objects()[0];if(target)animateLayout(new Map([[target,rect]]),{duration:props.config.duration,easing:easingOf(props.config)})}
+ if(props.config.effect==='flip'){order.value=[...order.value.slice(1),order.value[0]];await nextTick();animateLayout(before,{duration:props.config.duration,easing:easingOf(props.config),physics:props.config.physics})}
+ if(props.config.effect==='shared'){expanded.value=!expanded.value;await nextTick();animateLayout(before,{duration:props.config.duration,easing:easingOf(props.config),physics:props.config.physics})}
 }
 watch(()=>[props.config,props.stress,props.scene],prepare,{deep:true,immediate:true})
 watch(()=>props.time,seek)

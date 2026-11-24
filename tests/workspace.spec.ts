@@ -243,3 +243,20 @@ test('editor panels collapse and keyboard resize',async({page})=>{
  await page.getByRole('button',{name:'切换资源面板'}).click()
  await expect(page.getByLabel('搜索动效')).toBeVisible()
 })
+
+test('physical layout retarget retains visual position and clears animation',async({page})=>{
+ await page.goto('/?workspace=1')
+ const result=await page.evaluate(async()=>{
+  const {captureLayout,animateLayout,cancelLayout}=await import(/* @vite-ignore */ new URL('./packages/motion/index.js',location.href).href)
+  const el=document.createElement('div');el.style.cssText='position:fixed;left:10px;top:10px;width:50px;height:50px';document.body.append(el)
+  const opts={duration:500,physics:{mass:1,stiffness:180,damping:18}}
+  try{
+   let before=captureLayout([el]);el.style.left='200px';const first=animateLayout(before,opts)[0];first.pause();first.currentTime=100
+   const visual=el.getBoundingClientRect().left;before=captureLayout([el]);el.style.left='80px'
+   const next=animateLayout(before,opts)[0];next.pause();next.currentTime=0
+   const after=el.getBoundingClientRect().left;next.currentTime=500;const end=el.getBoundingClientRect().left
+   cancelLayout([el]);return {jump:Math.abs(visual-after),end,remaining:el.getAnimations().length}
+  }finally{el.remove()}
+ })
+ expect(result.jump).toBeLessThan(1);expect(result.end).toBeCloseTo(80);expect(result.remaining).toBe(0)
+})
