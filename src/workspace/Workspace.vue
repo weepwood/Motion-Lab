@@ -13,7 +13,9 @@ import { useAssets } from './assets'
 import { codeFor, extensionFor, type Format } from './export'
 import { usePlayback } from './usePlayback'
 import Preview from './Preview.vue'
+import CompositionPanel from './CompositionPanel.vue'
 const config=ref<Config>(defaults()), baseline=ref<Config|null>(null)
+const composition=ref(false),scene=ref<'object'|'interface'>('object')
 const activeAsset=ref(''), status=ref(''), format=ref<Format>('JavaScript'), stress=ref(1)
 const {store,error,favorite,save,importText,rename,archive,purge}=useAssets()
 const title=computed(()=>catalog.find(x=>x.id===config.value.effect)?.title)
@@ -47,11 +49,11 @@ const {intervals,measuring,measure,perf}=useFrameMetrics()
  <main class="ws">
   <header class="ws-top"><div><b>Motion Lab</b><span> / 交互动效工作台</span></div><nav><a href="./">聊天实验场</a><a href="./demo/">独立 Demo</a></nav></header>
   <WorkspaceLibrary :active="config.effect" :favorites="store.favorites" @choose="choose" @favorite="favorite" @preset="preset"/>
-  <section class="ws-center"><div class="ws-heading"><div><small>WORKSPACE / {{config.effect}}</small><h1>{{title}}</h1></div><button @click="baseline=baseline?null:sanitizeConfig(config);seek(0)">{{baseline?'关闭 A/B':'固定为 B 对比'}}</button></div>
-   <div class="ws-preview" :class="{compare:baseline}"><Preview :config="config" :time="time" label="A · 当前" :stress="stress"/><Preview v-if="baseline" :config="baseline" :time="time" label="B · 快照" :stress="1"/></div>
+  <section class="ws-center"><div class="ws-mode-switch"><button :aria-pressed="!composition" @click="composition=false">单动效</button><button :aria-pressed="composition" @click="pause();composition=true">多轨道</button></div><CompositionPanel v-if="composition"/><template v-else><div class="ws-heading"><div><small>WORKSPACE / {{config.effect}}</small><h1>{{title}}</h1></div><button @click="baseline=baseline?null:sanitizeConfig(config);seek(0)">{{baseline?'关闭 A/B':'固定为 B 对比'}}</button></div>
+   <div class="ws-scene-switch"><button :aria-pressed="scene==='object'" @click="scene='object'">基础对象</button><button :aria-pressed="scene==='interface'" @click="scene='interface'">界面卡片</button></div><div class="ws-preview" :class="{compare:baseline}"><Preview :config="config" :time="time" label="A · 当前" :stress="stress" :scene="scene"/><Preview v-if="baseline" :config="baseline" :time="time" label="B · 快照" :stress="1" :scene="scene"/></div>
    <TimelinePanel :config="config" :baseline="baseline" :time="time" :total="total" :playing="playing" :speed="speed" :loop="loop" :selected="selected" @seek="scrub" @toggle="playing?pause():play()" @speed="speed=$event" @loop="loop=$event" @select="selectFrame" @move="moveFrame"/>
    <section class="ws-performance"><h2 class="ws-inline-title"><Activity :size="15"/> 性能诊断</h2><div class="ws-toolbar"><button :disabled="!isTimeline(config.effect)||config.effect==='stagger'" @click="stress=stress===1?80:1">{{stress===1?'80 元素压力测试':'结束压力测试'}}</button><button :disabled="measuring" @click="measure">{{measuring?'采样中…':'采样 2 秒'}}</button></div><p v-if="perf">中位帧时间 {{perf.median.toFixed(1)}} ms · P95 {{perf.p95.toFixed(1)}} ms · 最长 {{perf.max.toFixed(1)}} ms · 估算漏帧 {{perf.missed}}</p><div v-if="perf" class="ws-hist"><div v-for="(n,i) in perf.bins" :key="i"><i :style="{width:(n/intervals.length*100)+'%'}"></i><span>{{['正常','1.5–2.5 倍','>2.5 倍'][i]}} · {{n}}</span></div></div><small>基于 requestAnimationFrame 间隔的估算，不等同于 GPU 实际掉帧。</small></section>
-  </section>
+  </template></section>
   <aside class="ws-inspector"><div class="ws-section-label"><h2>检查器</h2><span>{{config.effect}}</span></div><div class="ws-inspector-tabs" role="group" aria-label="检查器分组"><button v-for="tab in tabs" :key="tab.id" :aria-pressed="inspector===tab.id" @click="inspector=tab.id"><component :is="tab.icon" :size="15"/>{{tab.label}}</button></div><div v-show="inspector==='parameters'" class="ws-inspector-content">
    <label>时长 <output>{{config.duration}} ms</output><input v-model.number="config.duration" type="range" min="0" max="2000" step="10"></label>
    <label>位移 <output>{{config.distance}} px</output><input v-model.number="config.distance" type="range" min="0" max="240"></label>

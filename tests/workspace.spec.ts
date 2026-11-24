@@ -46,7 +46,7 @@ test('keyframe selection and move; interaction export includes runtime and clean
   await expect(page.getByLabel('生成代码')).toHaveValue(/captureLayout\(items\)/)
   await expect(page.getByLabel('生成代码')).toHaveValue(/export const dispose/)
   await page.getByRole('button',{name:'拖拽与复位',exact:true}).click()
-  await expect(page.getByLabel('生成代码')).toHaveValue(/detach = drag/)
+  await expect(page.getByLabel('生成代码')).toHaveValue(/detach = attachSpringDrag/)
 })
 
 test('generated JavaScript layout and drag can mount, interact and dispose',async({page})=>{
@@ -173,4 +173,22 @@ test('physical spring has finite endpoints and gesture replay cleans up',async({
  await page.getByRole('button',{name:'回放手势'}).click()
  await page.getByRole('button',{name:'滑动转场',exact:true}).click()
  await expect(page.locator('.ws-gesture-controls')).toHaveCount(0)
+})
+
+test('independent composition tracks, snap and reload',async({page})=>{
+ await page.goto('/?workspace=1')
+ await page.getByRole('button',{name:'多轨道',exact:true}).click()
+ await page.getByRole('button',{name:'新增轨道'}).click()
+ await page.getByLabel('轨道名称').fill('第一轨')
+ await page.getByLabel('轨道延迟').fill('133');await page.getByLabel('轨道延迟').press('Tab')
+ await expect(page.getByLabel('轨道延迟')).toHaveValue('140')
+ await page.getByRole('button',{name:'新增轨道'}).click()
+ await page.getByLabel('轨道动效').selectOption('fade')
+ await page.getByLabel('轨道时长').fill('500');await page.getByLabel('轨道时长').press('Tab')
+ await expect(page.locator('.ws-composition-row')).toHaveCount(2)
+ await page.getByRole('button',{name:'第一轨',exact:true}).click()
+ await expect(page.getByLabel('轨道延迟')).toHaveValue('140')
+ await expect(page.getByLabel('轨道时长')).toHaveValue('320')
+ await page.reload();await page.getByRole('button',{name:'多轨道',exact:true}).click()
+ await expect(page.locator('.ws-composition-row')).toHaveCount(2)
 })

@@ -52,3 +52,8 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 ## PR #8 质量收口
 - 首次 CI：Vue/React 独立构建成功；浏览器 57/58，Firefox 原 Vite 页面 setContent 后出现导航竞争。改用独立 data URL 新页面验证 HTML，保留真实交互断言。
 - Pages #7 两次部署失败（产物元数据缺失、同名重复），部署产物按 run_id/run_attempt 唯一命名，避免重试复用旧名称。待新 CI 和部署验证。
+
+## 编排与一致性批次
+- PR #8 首次 CI 实际截图六张：三浏览器桌面结构一致，移动页过长，原生滑块差异、预览空旷、刻度对齐需改进。新增统一滑块、界面卡片预览、刻度边距及紧凑移动导航。
+- 独立编排模式及 motion-lab-composition-v1 键；最多 24 条静态轨道，各自类型、延迟、时长、位移、静音、排序、缩放和吸附。暂不支持轨道导出或手势轨道。
+- attachSpringDrag 共享预览/导出运行时；重按读取视觉矩阵并承接位置，释放速度按近期指针采样估计；不宣称所有转场的速度连续。

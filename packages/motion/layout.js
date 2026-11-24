@@ -1,4 +1,4 @@
-import { play, settle, springValue } from './easing.js'
+import { play, settle, springValue, drag } from './easing.js'
 const running = new WeakMap()
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 const animate = (el, frames, duration, easing, extra = {}) => {
@@ -56,4 +56,40 @@ export function physicalSpringFrames(from,to,{mass=1,stiffness=180,damping=18,ve
     return A*Math.exp(r1*t)+(x-A)*Math.exp(r2*t)
   }
   return Array.from({length:count+1},(_,i)=>({offset:i/count,value:i===count?to:to+position(Math.max(0,duration)/1000*i/count)}))
+}
+
+/** Interruptible spring drag, shared by previews and generated applications. */
+export function attachSpringDrag(el,{duration=320,onRecord=()=>{},onInterrupt=()=>{}}={}){
+  let returning=null, x=0,y=0,originX=0,originY=0,start=0,samples=[]
+  const original=el.style.transform
+  const detach=drag(el,{
+    onStart(){
+      const value=getComputedStyle(el).transform
+      const matrix=value==='none'?new DOMMatrixReadOnly():new DOMMatrixReadOnly(value)
+      originX=x=matrix.m41;originY=y=matrix.m42
+      returning?.cancel();onInterrupt()
+      el.style.transform='translate('+x+'px,'+y+'px)'
+      start=performance.now();samples=[{t:0,x,y}]
+    },
+    onUpdate(p){
+      x=originX+p.dx;y=originY+p.dy
+      if(samples.length<1500)samples.push({t:performance.now()-start,x,y})
+      el.style.transform='translate('+x+'px,'+y+'px)'
+    },
+    onEnd(){
+      const end=performance.now()-start,last=samples.at(-1)
+      const prior=[...samples].reverse().find(s=>last&&last.t-s.t>=20)
+      const dt=last&&prior?(last.t-prior.t)/1000:0
+      const velocity=v=>Math.max(-2000,Math.min(2000,v))
+      const recent=last&&prior&&dt>0&&dt<=.1&&end-last.t<=80
+      const vx=recent?velocity((last.x-prior.x)/dt):0,vy=recent?velocity((last.y-prior.y)/dt):0
+      if(samples.length<1500)samples.push({t:end,x,y})
+      onRecord(samples.map(s=>({...s})))
+      el.style.transform=original
+      if(reduced()||duration<=0)return
+      const xs=physicalSpringFrames(x,0,{duration,velocity:vx}),ys=physicalSpringFrames(y,0,{duration,velocity:vy})
+      returning=play(el,xs.map((s,i)=>({offset:s.offset,transform:'translate('+s.value+'px,'+ys[i].value+'px)'})),duration,'linear')
+    }
+  })
+  return ()=>{detach();returning?.cancel();el.style.transform=original}
 }
