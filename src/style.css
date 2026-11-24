@@ -8,7 +8,7 @@
 /* ---------- tokens ---------- */
 .theme-light {
   --surface: #fff; --surface-2: #f4f4f5; --text: #000; --muted: #707579; --border: #dfe1e5;
-  --hover: rgba(112, 117, 121, .08); --press: rgba(112, 117, 121, .16); --ripple: rgba(0, 0, 0, .08);
+  --hover: rgba(112, 117, 121, .08); --press: rgba(112, 117, 121, .16); --mk-ripple-color: rgba(0, 0, 0, .08);
   --accent: #3390ec; --accent-soft: rgba(51, 144, 236, .12); --on-accent: #fff; --selected: #3390ec;
   --danger: #df3f40; --switch-off: #c4c9cc; --badge: #3390ec; --check: #4fae4e;
   --incoming: #fff; --outgoing: #eeffde; --in-meta: #686c72; --out-meta: #4fae4e; --bubble-shadow: rgba(16, 35, 47, .15);
@@ -20,7 +20,7 @@
 }
 .theme-dark {
   --surface: #212121; --surface-2: #181818; --text: #fff; --muted: #aaa; --border: #2f2f2f;
-  --hover: rgba(255, 255, 255, .05); --press: rgba(255, 255, 255, .1); --ripple: rgba(255, 255, 255, .08);
+  --hover: rgba(255, 255, 255, .05); --press: rgba(255, 255, 255, .1); --mk-ripple-color: rgba(255, 255, 255, .08);
   --accent: #8774e1; --accent-soft: rgba(135, 116, 225, .16); --on-accent: #fff; --selected: #8774e1;
   --danger: #ff595a; --switch-off: #5a5a5a; --badge: #8774e1; --check: #8774e1;
   --incoming: #212121; --outgoing: #766ac8; --in-meta: #aaa; --out-meta: rgba(255, 255, 255, .65); --bubble-shadow: rgba(0, 0, 0, .35);
@@ -55,8 +55,8 @@ button:disabled { cursor: not-allowed }
 
 /* Establish an explicit paint boundary for each interactive control. */
 [data-rippable] { position: relative; overflow: hidden; contain: paint }
-.ripple-container { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; contain: paint; pointer-events: none }
-.ripple-wave { position: absolute; border-radius: 50%; background: var(--ripple); pointer-events: none; transform: scale(0) }
+/* ripple geometry/lifetime lives in packages/motion ripple.js; JS reads the
+   --mk-ripple-* tokens set by the settings store at press time. */
 
 /* All motion switched off (level 0): user toggle, system "reduce motion" or power saving. */
 .motion-off *, .motion-off *::before, .motion-off *::after {
@@ -67,7 +67,7 @@ button:disabled { cursor: not-allowed }
  * colours keep their duration. Duration tokens ending in -move are set to 0
  * by the settings store for this level; the fade counterpart keeps running.
  */
-.anim-level-1 .ripple-wave { animation: none }
+.anim-level-1 .mk-fly, .anim-level-1 .mk-flight { animation: none; transition: none }
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal }
 
 /* ---------- layout ---------- */
@@ -155,7 +155,7 @@ button:disabled { cursor: not-allowed }
 .chat-entry { display: flex; align-items: center; gap: 12px; width: 100%; height: 72px; padding: 0 9px; border-radius: 12px; text-align: left; transition: background-color var(--dur-micro) ease }
 .chat-entry > .avatar { z-index: 1 }
 .chat-entry:hover { background: var(--hover) }
-.chat-entry.selected { --ripple: rgba(255, 255, 255, .2); background: var(--selected); color: var(--on-accent) }
+.chat-entry.selected { --mk-ripple-color: rgba(255, 255, 255, .2); background: var(--selected); color: var(--on-accent) }
 .chat-entry.selected .chat-line small, .chat-entry.selected .chat-preview, .chat-entry.selected .list-check { color: inherit; opacity: .88 }
 .chat-entry.selected .unread-badge { background: #fff; color: var(--selected) }
 .chat-entry.selected .online-dot { border-color: var(--selected) }
@@ -189,6 +189,10 @@ button:disabled { cursor: not-allowed }
 .typing-dots i:nth-child(3) { animation-delay: .3s }
 @keyframes typing { 0%, 60%, 100% { transform: translateY(0); opacity: .4 } 30% { transform: translateY(-3px); opacity: 1 } }
 .motion-off .typing-dots i { animation: none; opacity: .7 }
+
+/* heavy-animation mutex (tweb dispatchHeavyAnimationEvent): flights & theme reveals
+   hold decorative rendering — the wallpaper jumps instantly instead of racing them. */
+html.mk-heavy-held .blob { transition-duration: 0s }
 
 /* ---------- conversation ---------- */
 .conversation { position: relative; display: flex; flex-direction: column; min-width: 0; height: 100%; overflow: hidden; background: var(--wp-base) }
@@ -264,7 +268,7 @@ button:disabled { cursor: not-allowed }
 .mine .bubble-reply { --quote: var(--out-quote); --quote-bg: var(--out-quote-bg) }
 
 /* jump-to-reply flash, like Telegram's message highlight */
-.message-row.highlight::before { content: ''; position: absolute; z-index: 0; inset: -2px -100vw; background: var(--highlight); pointer-events: none; animation: flash var(--dur-flash) ease-out forwards }
+.message-row.highlight::before { content: ''; position: absolute; z-index: 0; inset: -2px; border-radius: 10px; background: var(--highlight); pointer-events: none; animation: flash var(--dur-flash) ease-out forwards }
 @keyframes flash { 0% { opacity: 0 } 15%, 70% { opacity: 1 } 100% { opacity: 0 } }
 
 /* message enter / pending flight */

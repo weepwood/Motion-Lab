@@ -83,3 +83,36 @@ export function fastRaf(cb) {
 export function doubleRaf() {
   return new Promise(resolve => { fastRaf(() => fastRaf(resolve)) })
 }
+
+/* -------------------------------------------------- heavy animation mutex */
+
+/**
+ * tweb `dispatchHeavyAnimationEvent`: while a tracked animation is running,
+ * expensive decorative rendering should step aside. The class
+ * `mk-heavy-held` lands on <html> for the duration (or `timeout`, as a
+ * safety net), and CSS decides what to pause:
+ *
+ *   .mk-heavy-held .blob { transition-duration: 0s }
+ *
+ * Flights and reveals call this automatically; use it around any custom
+ * animation that shares frames with expensive effects.
+ *
+ * @param {Promise<unknown>} promise   resolves when the heavy animation ends
+ * @param {number} [timeout=2000]      safety net so a lost promise can't hold forever
+ */
+let heavyCount = 0
+export function holdHeavyAnimations(promise, timeout = 2000) {
+  heavyCount++
+  document.documentElement.classList.add('mk-heavy-held')
+  const done = () => {
+    heavyCount = Math.max(0, heavyCount - 1)
+    if (heavyCount === 0) document.documentElement.classList.remove('mk-heavy-held')
+  }
+  const safety = new Promise(resolve => setTimeout(resolve, timeout))
+  Promise.race([promise, safety]).then(done, done)
+}
+
+/** Is a heavy animation currently holding decorative rendering? */
+export function isHeavyAnimationHeld() {
+  return document.documentElement.classList.contains('mk-heavy-held')
+}

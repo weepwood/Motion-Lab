@@ -1,125 +1,26 @@
-import type { Directive } from 'vue'
-import { play } from './motion'
-import { durationFor, easingFor, effectiveLevel, settings } from './settings'
-
-type RippleWave = {
-  animations: Animation[]
-  timers: number[]
-  released: boolean
-  cleanup: () => void
-}
-type RippleBinding = { handler: (e: PointerEvent) => void; layer: HTMLElement; waves: Set<RippleWave> }
-const bindings = new WeakMap<HTMLElement, RippleBinding>()
-
-/** tweb animation-level 0/1 quick highlight: no expansion, just a fast fade in/out. */
-const LEVEL1_FLASH = 120
-
 /**
- * Telegram Web-style press ripple: it grows while the pointer is held, then
- * fades after release. Short presses keep the wave visible long enough to read.
- * The radius is the distance from the press point to the farthest corner
- * (tweb `√((|y-h/2|+h/2)² + (|x-w/2|+w/2)²)`), duration and easing come from
- * the ripple category; start/end scale are mechanism parameters.
+ * v-ripple Vue directive — a thin wrapper over motion-kit's `attachRipple`.
+ *
+ * Geometry, damping and level-1 degradation live in the package; the app only
+ * supplies the token bridge: `--mk-ripple-duration` / `--mk-ripple-easing`
+ * are written by the settings store (see cssVars in App.vue) so the ripple
+ * always follows the live motion settings, and `--mk-ripple-color` comes from
+ * the theme / selected-entry CSS.
  */
+
+import type { Directive } from 'vue'
+import { attachRipple } from '../packages/motion/index.js'
+
+const bindings = new WeakMap<HTMLElement, () => void>()
+
 export const vRipple: Directive<HTMLElement> = {
   mounted(el) {
     el.dataset.rippable = ''
-    const layer = document.createElement('span')
-    layer.className = 'ripple-container'
-    layer.setAttribute('aria-hidden', 'true')
-    el.append(layer)
-
-    const waves = new Set<RippleWave>()
-    const handler = (e: PointerEvent) => {
-      if (e.button !== 0 && e.button !== 2) return
-      const duration = durationFor('ripple')
-      if (!duration) return
-      const rect = layer.getBoundingClientRect()
-      const x = Math.min(rect.width, Math.max(0, e.clientX - rect.left))
-      const y = Math.min(rect.height, Math.max(0, e.clientY - rect.top))
-      const farthestX = Math.max(x, rect.width - x)
-      const farthestY = Math.max(y, rect.height - y)
-      const radius = Math.hypot(farthestX, farthestY)
-      const size = radius
-      const wave = document.createElement('span')
-      wave.className = 'ripple-wave'
-      wave.style.width = wave.style.height = size + 'px'
-      wave.style.left = x - size / 2 + 'px'
-      wave.style.top = y - size / 2 + 'px'
-      layer.append(wave)
-
-      const startedAt = performance.now()
-      const touch = e.pointerType === 'touch'
-      const reduced = effectiveLevel.value < 2
-      const startScale = touch ? Math.max(0.27, settings.mech.rippleStart) : settings.mech.rippleStart
-      const animation = reduced
-        ? play(wave, [
-            { transform: `scale(${settings.mech.rippleEnd})`, opacity: 0 },
-            { transform: `scale(${settings.mech.rippleEnd})`, opacity: 1 }
-          ], LEVEL1_FLASH, 'ease-out', { fill: 'forwards' })
-        : play(wave, [
-            { transform: `scale(${startScale})` },
-            { transform: `scale(${settings.mech.rippleEnd})` }
-          ], duration, easingFor('ripple'), { fill: 'forwards' })
-      const win = el.ownerDocument.defaultView || window
-      let detachListeners = () => {}
-      const rippleWave: RippleWave = {
-        animations: animation ? [animation] : [],
-        timers: [],
-        released: false,
-        cleanup: () => {
-          detachListeners()
-          rippleWave.timers.forEach(timer => win.clearTimeout(timer))
-          rippleWave.animations.forEach(item => item.cancel())
-          wave.remove()
-          waves.delete(rippleWave)
-        }
-      }
-      waves.add(rippleWave)
-
-      const release = () => {
-        if (rippleWave.released) return
-        rippleWave.released = true
-        detachListeners()
-
-        const elapsed = performance.now() - startedAt
-        const fadeDuration = reduced ? LEVEL1_FLASH / 2 : duration / 2
-        const fadeDelay = reduced ? LEVEL1_FLASH - Math.min(elapsed, LEVEL1_FLASH) : Math.max(duration - elapsed - fadeDuration, 0)
-        const removeDelay = reduced ? LEVEL1_FLASH * 2 : Math.max(duration - elapsed, fadeDuration)
-        rippleWave.timers.push(win.setTimeout(() => {
-          const fade = play(wave, [{ opacity: 1 }, { opacity: 0 }], fadeDuration, 'ease-out', { fill: 'forwards' })
-          if (fade) rippleWave.animations.push(fade)
-        }, fadeDelay))
-        rippleWave.timers.push(win.setTimeout(rippleWave.cleanup, removeDelay))
-      }
-      const onPointerMove = (move: PointerEvent) => {
-        if (touch && move.pointerId === e.pointerId && Math.hypot(move.clientX - e.clientX, move.clientY - e.clientY) > 8) release()
-      }
-      const onPointerEnd = (end: PointerEvent) => {
-        if (end.pointerId === e.pointerId) release()
-      }
-
-      win.addEventListener('pointerup', onPointerEnd, { passive: true })
-      win.addEventListener('pointercancel', onPointerEnd, { passive: true })
-      win.addEventListener('blur', release, { once: true })
-      if (touch) win.addEventListener('pointermove', onPointerMove, { passive: true })
-      detachListeners = () => {
-        win.removeEventListener('pointerup', onPointerEnd)
-        win.removeEventListener('pointercancel', onPointerEnd)
-        win.removeEventListener('blur', release)
-        win.removeEventListener('pointermove', onPointerMove)
-      }
-    }
-    bindings.set(el, { handler, layer, waves })
-    el.addEventListener('pointerdown', handler)
+    bindings.set(el, attachRipple(el, {}))
   },
   unmounted(el) {
-    const binding = bindings.get(el)
-    if (!binding) return
-    el.removeEventListener('pointerdown', binding.handler)
-    binding.waves.forEach(wave => wave.cleanup())
-    binding.layer.remove()
-    delete el.dataset.rippable
+    bindings.get(el)?.()
     bindings.delete(el)
+    delete el.dataset.rippable
   }
 }

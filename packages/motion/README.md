@@ -1,6 +1,6 @@
 # motion-kit
 
-零依赖的 Web 动效工具包。这是 [Motion Lab](../../README.md) 研究的工程化产物：把 tweb（Telegram Web）动效架构里**可在任何项目复用的内核**提取成 8 个 ES Module，纯 JS + DOM 标准，无框架耦合、无构建要求（支持 ESM 的浏览器直接 `import`）。
+零依赖的 Web 动效工具包，当前版本 **1.0.1**。这是 [Motion Lab](../../README.md) 研究的工程化产物：把 tweb（Telegram Web）动效架构里**可在任何项目复用的内核**提取成 8 个 ES Module，纯 JS + DOM 标准，无框架耦合、无构建要求（支持 ESM 的浏览器直接 `import`）。Motion Lab 的主应用与演示页共用这一份实现（单一源码）。
 
 全部代码为独立实现（MIT），不含 tweb 源代码。
 
@@ -88,8 +88,10 @@ npm run dev          # 然后访问 http://localhost:5173/demo/
 | `bezierValue / bezierCss` | 贝塞尔求值 / 生成 CSS | `[x1,y1,x2,y2]` |
 | `springValue / springCss` | 阻尼弹簧 → `linear()` | `bounce 0–0.6` |
 | `play / settle` | 永不抛错的 animate 包装 | 异常时回退 `ease-out` |
-| `flyClone` | 双曲线快照飞行 + 落位交叉淡出 | `curveX/curveY/landFade/reveal` |
-| `flyParabola` | 解析抛物线飞行 + 落点提前显影 | `elevation/landing` |
+| `flyClone` | 双曲线快照飞行 + 落位交叉淡出 | `from`（元素或矩形）/`curveX/curveY/landFade/reveal/className` |
+| `flyParabola` | 解析抛物线飞行 + 落点提前显影 | `from`/`elevation`/`landing`/`className` |
+| `burstParticles` | 粒子迸发 | `at`/`duration`/`className` |
+| `holdHeavyAnimations` | 重动画互斥（飞行/揭示期间装饰性渲染让位） | `promise, timeout=2000` |
 | `attachRipple` | 最远角涟漪 | `duration/startScale/endScale` |
 | `attachSwipe` | 锁轴阻尼手势 | `max/trigger/onMove/onEnd` |
 | `createScrollSaver` | 滚动锚点补偿 | `save()/restore()` 夹住 DOM 变化 |

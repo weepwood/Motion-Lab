@@ -15,8 +15,9 @@
 /**
  * @param {HTMLElement | (() => HTMLElement | null)} scroller
  * @param {string} [rowSelector='.mk-anchor-row']  selector for anchorable rows
+ * @param {string} [keyAttr='data-anchor']         attribute identifying a row
  */
-export function createScrollSaver(scroller, rowSelector = '.mk-anchor-row') {
+export function createScrollSaver(scroller, rowSelector = '.mk-anchor-row', keyAttr = 'data-anchor') {
   const get = () => (typeof scroller === 'function' ? scroller() : scroller)
   let anchor = null
 
@@ -25,7 +26,8 @@ export function createScrollSaver(scroller, rowSelector = '.mk-anchor-row') {
     for (const row of el.querySelectorAll(rowSelector)) {
       const rect = row.getBoundingClientRect()
       if (rect.height > 0 && rect.bottom >= box.top && rect.top <= box.bottom) {
-        return { key: row.dataset.anchor ?? '', offset: rect.top - box.top }
+        const key = row.getAttribute(keyAttr)
+        return { key, offset: rect.top - box.top }
       }
     }
     return null
@@ -40,7 +42,7 @@ export function createScrollSaver(scroller, rowSelector = '.mk-anchor-row') {
     restore() {
       const el = get()
       if (!el || !anchor?.key) { anchor = null; return }
-      const row = el.querySelector(`[data-anchor="${anchor.key}"]`)
+      const row = el.querySelector(`[${keyAttr}="${anchor.key}"]`)
       const had = anchor
       anchor = null
       if (!row) return

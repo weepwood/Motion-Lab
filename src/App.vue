@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   ArrowDown, ArrowLeft, Bookmark, CheckCheck, Copy, FileText, FlaskConical, Forward, Gauge, Image as ImageIcon, Info,
   ListChecks, Menu, MessageCircle, Mic, Moon, MoreVertical, Paperclip, Reply, Search, Send, Settings, Settings2,
   Smile, Sparkles, Trash2, X, Zap
 } from 'lucide-vue-next'
 import { vRipple } from './ripple'
-import { burst, cancelFlight, flyBubble, flyEmoji, play, settle } from './motion'
-import { createScrollSaver } from './scrollSaver'
+import { burst, cancelFlight, flyBubble, flyEmoji, holdHeavyAnimations, play, settle } from './motion'
+import { createScrollSaver } from '../packages/motion/index.js'
 import {
   animationList, durationFor, easing, easingFor, effectiveLevel, isEnabled, microDuration, moveDurationFor,
   powerSavingActive, resolvedTheme, settings, system, watchEnvironment, type DemoKey, type SettingsTab, type ThemeMode
 } from './settings'
-import SettingsPanel from './components/SettingsPanel.vue'
-
+// Async so the settings UI stays out of the critical first paint (P1 perf).
+const SettingsPanel = defineAsyncComponent(() => import('./components/SettingsPanel.vue'))
 /* ------------------------------------------------------------------ data */
 
 type Message = { id: number; text: string; at: number; mine: boolean; reaction?: string; replyTo?: number }
@@ -71,7 +71,7 @@ const stageRef = ref<HTMLElement | null>(null)
 const scrollEl = ref<HTMLElement | null>(null)
 const composer = ref<HTMLTextAreaElement | null>(null)
 const searchInput = ref<HTMLInputElement | null>(null)
-const settingsRef = ref<InstanceType<typeof SettingsPanel> | null>(null)
+const settingsRef = ref<{ go: (tab: SettingsTab) => void; back: () => void } | null>(null)
 
 const activeId = ref(1)
 const text = ref('')
@@ -114,7 +114,7 @@ function later(fn: () => void, ms: number) {
 const wait = (ms: number) => new Promise<void>(resolve => later(resolve, ms))
 
 /** Keeps the viewport pinned to a visible message row across list mutations (tweb scrollSaver). */
-const scrollSaver = createScrollSaver(() => scrollEl.value)
+const scrollSaver = createScrollSaver(() => scrollEl.value, '.message-row', 'data-row')
 
 /* ------------------------------------------------------------------ derived */
 
@@ -228,6 +228,9 @@ const cssVars = computed(() => {
     vars['--dur-' + item.key + '-move'] = moveDurationFor(item.key) + 'ms'
     vars['--ease-' + item.key] = easingFor(item.key)
   }
+  // motion-kit bridge: package effects (ripple…) read the same live tokens (tweb reads --ripple-duration back from CSS).
+  vars['--mk-ripple-duration'] = durationFor('ripple') + 'ms'
+  vars['--mk-ripple-easing'] = easingFor('ripple')
   return vars
 })
 
@@ -299,7 +302,7 @@ watch(folder, () => { void nextTick(measureIndicator) })
 
 /* ------------------------------------------------------------------ theme */
 
-type ViewTransitionDoc = { startViewTransition?: (cb: () => Promise<void>) => { ready: Promise<void> } }
+type ViewTransitionDoc = { startViewTransition?: (cb: () => Promise<void>) => { ready: Promise<void>; finished?: Promise<void> } }
 async function setTheme(mode: ThemeMode, x = innerWidth - 48, y = 48) {
   const before = resolvedTheme.value
   const after = mode === 'system' ? (system.dark ? 'dark' : 'light') : mode
@@ -309,6 +312,8 @@ async function setTheme(mode: ThemeMode, x = innerWidth - 48, y = 48) {
   if (before === after || !duration || typeof doc.startViewTransition !== 'function') { await apply(); return }
   try {
     const transition = doc.startViewTransition(apply)
+    // P1 perf: hold decorative rendering while the snapshot reveals (tweb pauses heavy animations).
+    holdHeavyAnimations(transition.finished ?? transition.ready, 2000)
     await transition.ready
     const radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))
     // tweb: entering night takes longer than leaving (600 ms vs 500 ms => ×0.83).
@@ -328,6 +333,8 @@ watch(resolvedTheme, t => {
   document.documentElement.dataset.theme = t
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'dark' ? '#212121' : '#ffffff')
 }, { immediate: true })
+// Sync the effective animation level for motion-kit effects (ripple degradation).
+watch(effectiveLevel, level => { document.documentElement.dataset.motionLevel = String(level) }, { immediate: true })
 
 /* ------------------------------------------------------------------ navigation */
 

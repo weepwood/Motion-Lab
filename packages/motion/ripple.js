@@ -76,7 +76,13 @@ export function attachRipple(el, opts = {}) {
       ? play(wave, [{ transform: `scale(${end})`, opacity: 0 }, { transform: `scale(${end})`, opacity: 1 }], FLASH, 'ease-out', { fill: 'forwards' })
       : play(wave, [{ transform: `scale(${start})` }, { transform: `scale(${end})` }],
         duration, opts.easing ?? cssVar('--mk-ripple-easing', 'ease-out'), { fill: 'forwards' })
-    live = { wave, anim, reduced, duration, start: performance.now() }
+    live = { wave, anim, reduced, duration, start: performance.now(), x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch' }
+  }
+
+  // tweb: a touch that turns into a scroll cancels the ripple immediately.
+  const moveCancel = e => {
+    if (!live?.touch) return
+    if (Math.hypot(e.clientX - live.x, e.clientY - live.y) > 8) release()
   }
 
   const release = () => {
@@ -97,10 +103,12 @@ export function attachRipple(el, opts = {}) {
   el.addEventListener('pointerdown', handler)
   window.addEventListener('pointerup', release, { passive: true })
   window.addEventListener('pointercancel', release, { passive: true })
+  window.addEventListener('pointermove', moveCancel, { passive: true })
   return () => {
     el.removeEventListener('pointerdown', handler)
     window.removeEventListener('pointerup', release)
     window.removeEventListener('pointercancel', release)
+    window.removeEventListener('pointermove', moveCancel)
     layer.remove()
     live = null
   }

@@ -202,3 +202,18 @@ test('mobile: chat list first, chat pushes in and back returns', async ({ page }
   await page.getByRole('button', { name: '返回会话列表' }).click()
   await expect(page.locator('.app-shell')).not.toHaveClass(/mobile-chat-open/)
 })
+
+test('CI gate: a typical journey produces no console errors', async ({ page }) => {
+  const errors: string[] = []
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()) })
+  page.on('pageerror', e => errors.push(String(e)))
+  await page.goto('/')
+  const input = page.getByRole('textbox', { name: '消息内容' })
+  await input.fill('控制台健康检查')
+  await input.press('Enter')
+  await expect(page.locator('.flight-layer')).toHaveCount(0, { timeout: 5000 })
+  await page.locator('.chat-entry').filter({ hasText: 'Alex Chen' }).first().click()
+  await page.getByRole('button', { name: '打开动效设置' }).click()
+  await expect(page.getByRole('region', { name: '设置面板' })).toBeVisible()
+  expect(errors, 'the journey must be console-clean\n' + errors.join('\n')).toEqual([])
+})

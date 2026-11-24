@@ -9,7 +9,7 @@
 
 ## 复用到其他项目：`packages/motion/`（motion-kit）
 
-本项目把可复用的内核提取成了**零依赖纯 ESM 包**（帧合批、keyed 动画实例、双曲线飞行、抛物线飞行、涟漪、滑动手势、滚动锚点、圆形揭示 + token 样式表），拷进任何框架的项目即可使用。配套 `demo/index.html` 是零构建的交互演示（dev 模式下访问 `http://localhost:5173/demo/`）。详见 [`packages/motion/README.md`](packages/motion/README.md)。
+本项目把可复用的内核提取成了**零依赖纯 ESM 包**（帧合批、keyed 动画实例、双曲线飞行、抛物线飞行、涟漪、滑动手势、滚动锚点、圆形揭示 + token 样式表），拷进任何框架的项目即可使用。自 v3.2 起**主应用自身也直接 import 这个包**（单一源码，修一处两边生效）。配套 `demo/index.html` 是零构建的交互演示：dev 模式下访问 `http://localhost:5173/demo/`，生产构建（`npm run build`）会把 demo 和包一并放进 `dist/`，随 GitHub Pages 部署到 `<site>/demo/`。详见 [`packages/motion/README.md`](packages/motion/README.md)。
 
 ## 本地运行
 
@@ -74,17 +74,19 @@ npx playwright install chromium && npm run test:e2e
 src/
 ├── App.vue                    布局、会话、消息、手势、菜单、演示
 ├── settings.ts                三层配置模型（等级 / 类别覆盖 / 机制参数）+ 存储校验与迁移、环境监听
-├── motion.ts                  缓动预设、弹簧求解、贝塞尔求值、双曲线飞行 + 抛物线飞行 / 粒子
-├── engine.ts                  帧合批（fastRaf）+ keyed 动画实例（同 key 新动画自动打断旧动画）
-├── scrollSaver.ts             滚动锚点补偿（列表变化时把视口钉在可见消息上）
+├── motion.ts                  适配层：UI 缓动预设 + 把设置/机制参数桥接到 packages/motion
 ├── presets.ts                 手感预设（含「Telegram 官方手感」实测值）与配置导入导出
-├── ripple.ts                  v-ripple 点击涟漪指令（最远角半径、等级 1 快速淡入降级）
+├── ripple.ts                  v-ripple 指令（包装 motion-kit 的 attachRipple，token 桥接）
 ├── style.css                  主题变量与全部样式（时长/曲线/位移分离 token 均来自 CSS 变量）
-└── components/
+└── components/                （SettingsPanel 为异步分包，不进首屏）
     ├── SettingsPanel.vue      推入式设置页（主页 / 通用 / 动画与省电 / 实验室：机制参数）
     ├── CurveEditor.vue        可拖动的曲线编辑器 + 播放预览
     ├── CompareLanes.vue       曲线对比赛道
-    ├── ToggleRow.vue / RadioRow.vue / RangeSlider.vue
+    └── ToggleRow.vue / RadioRow.vue / RangeSlider.vue
+
+packages/motion/               motion-kit v1.0.1 — 零依赖动效包（应用与 demo 共用的唯一实现）
+demo/                          零构建演示页（构建时随 dist 一起部署）
+scripts/                       check-package.mjs（包导入烟雾）/ deploy-demo.mjs（demo 入 dist）
 ```
 
 ## 设计原则
@@ -94,8 +96,10 @@ src/
 - 表情飞行是解析抛物线（tweb `reactionFlight`）：`y = y₀ + bt + at²`，中点抬升可调，落点在飞行 75% 处提前显影。
 - 滑动回复（tweb `bubbles`）：20px 锁轴弃权、64px 阻尼封顶后按 25% 衰减跟手、阈值 = 封顶 × 比例、图标按进度显影。
 - 位移 / 淡入 token 分离：`--dur-*` 驱动淡入与颜色、`--dur-*-move` 驱动 transform；等级 1 只把后者置 0，即得「位移瞬跳、淡入照常」。
-- keyed 动画实例 + 帧合批：同一目标的新动画自动打断旧动画，所有 JS 侧动画共用一个 rAF 队列。
+- keyed 动画实例 + 帧合批：同一目标的新动画自动打断旧动画，所有 JS 侧动画共用一个 rAF 队列（tweb schedulers/animation）。
 - 列表变化时用滚动锚点补偿（tweb `scrollSaver`）：先钉住最上方可见消息，DOM 变化后补偿 `scrollTop`。
+- 重动画互斥（tweb `dispatchHeavyAnimationEvent`）：飞行与主题揭示期间持有互斥，壁纸等装饰性过渡让位（`html.mk-heavy-held`）。
+- 单一源码：动效实现只存在于 `packages/motion`，应用与 demo 都只是它的调用方——修一处，两边生效，永不漂移。
 - 长列表只渲染最近 120 条，“查看更早”每次再加载 120 条；压力测试一次追加 500 条。
 
 ## 许可

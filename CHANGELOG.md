@@ -1,3 +1,37 @@
+# 3.2.0 单一源码合并 + CI 防护网 + 针对实测的性能优化
+
+基于实测的优化落地（原则：优化项全部来自测量或已发生的事故，不拍脑袋）。
+
+## 一、P0 · 消除双源码（应用 ⇄ motion-kit）
+
+- v3.1 遗留的重复实现全部收拢：`src/engine.ts`、`src/scrollSaver.ts` **删除**，`src/motion.ts` 改为**适配层**（保留 UI 缓动预设 + 把设置/机制参数桥接到包），`src/ripple.ts` 变为 `attachRipple` 的指令薄包装（时长/曲线经 `--mk-ripple-*` token 桥实时生效，涟漪颜色迁移到 `--mk-ripple-color`）。
+- 包 v1.0.1 为此新增能力：`flyClone`/`flyParabola` 支持 `from`（矩形或元素，飞行终点也接受纯矩形）、`className`；`burstParticles`（className 可配）；`createScrollSaver` 支持自定义行属性；涟漪追加 tweb 的「滑动即撤」（触屏移动 >8px 立即放弃）。
+- 效果：动效实现现在**只有一份**（`packages/motion`），应用和 demo 都是它的调用方。
+
+## 二、P0 · 交付防护网（三道闸门进 CI）
+
+1. **包导入烟雾**（`npm run check:pkg`，scripts/check-package.mjs）：逐模块 import——v1.0.0 曾把 `??`/`||` 混用的语法错误发布出去，此闸门专为它而立。
+2. **demo 冒烟测试**（`tests/demo.spec.ts`，7 例）：飞行打断无残留、抛物线落点、涟漪 token 实时性、滑动手势、等级 token、滚动锚点，全部 console-clean。
+3. **主应用 console 零报错断言**加入 e2e；`index.d.ts` 的漂移由主 typecheck 把关（应用直接 import 包的 .d.ts）。
+- CI（ci.yml）顺序改为：install → check:pkg → build → playwright（motion+demo 全通过才绿）。
+
+## 三、P0 · demo 可部署
+
+`npm run build` 末尾执行 `scripts/deploy-demo.mjs`：demo 与包随构建进 `dist/`，GitHub Pages 部署后可直接访问 `<site>/demo/`。
+
+## 四、P1 · 三处性能点（针对性能探针实测）
+
+1. **重动画互斥**（tweb `dispatchHeavyAnimationEvent` 引用计数）：包新增 `holdHeavyAnimations(promise, timeout=2000)`（`html.mk-heavy-held`），`flyClone/flyParabola/burstParticles` 自动持有；主题揭示（View Transitions）同样接入——飞行/揭示期间壁纸 blob 过渡让位，不再抢同一批帧（实测 VT 场景曾是最重：4 帧 >34ms）。
+2. **引用高亮瘦身**：`.highlight::before` 从 `inset: -2px -100vw`（一个 200vw 宽的绘制层）改为行内宽度 + 圆角。
+3. **设置面板异步分包**：`SettingsPanel` 改 `defineAsyncComponent`，不进首屏关键路径。叠加去重成果：主包 gzip **63.6 kB → 54.6 kB（-14%）**，含一个新的 35 kB（gzip 12.6 kB）懒加载设置分块。
+
+## 五、验证
+
+- typecheck、`npm run build`（demo 入 dist 实测 200）、包 8 模块 import 烟雾全过。
+- Playwright **23/23**（应用 16 + demo 7）。
+
+---
+
 # 3.1.0 motion-kit：零依赖可复用动效包 + 静态演示页
 
 把本项目的研究成果提取成任何项目都能直接拷走的包，并配了一个零构建的单页演示。
