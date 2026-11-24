@@ -116,3 +116,7 @@ MIT License。若将来直接移植 tweb 的代码，请遵守其 GPL-3.0 许可
 访问 `/?workspace=1`：分类搜索、可编辑参数、时间轴、A/B 快照、本地版本预设、导出与帧间隔诊断。原聊天入口及 v3 设置保持不变。布局与拖拽采用实际 DOM 交互；代码生成暂覆盖静态关键帧效果，其他类型提供接入说明。macOS/iOS/Linear 参数仅为独立近似研究。
 
 工作台打磨：资源侧栏、分组检查器、A/B 时间轴轨道、关键帧定位/移动、循环与 0.25× 播放。布局/手势 JS、Vue、React 示例需复制 `packages/motion` 至 `./motion-kit` 或调整 import；CSS 输出只包含样式，不能单独实现几何测量与指针事件。
+
+专业工具：时间轴关键帧支持拖动；拖拽演示可录放轨迹；资产支持回收站、批量恢复与版本 A/B；新增物理弹簧与独立 HTML 导出。具体验证状态以 CI 与 AGENTS.md 为准。
+
+完整 ZIP 导出包含 HTML、Vue、React、JavaScript、CSS、Tokens、AI、配置和 motion-kit；`node scripts/verify-exports.mjs` 在临时目录安装验证用 React 依赖并构建 Vue/React 示例，不修改主项目依赖。

@@ -19,3 +19,5 @@ export { createScrollSaver } from './scroll-saver.js'
 export { revealFrom } from './reveal.js'
 
 export { captureLayout, animateLayout, sharedElement, springFrames, staggerIn, cancelLayout } from './layout.js'
+
+export { physicalSpringFrames } from './layout.js'

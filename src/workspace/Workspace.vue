@@ -5,14 +5,17 @@ import WorkspaceLibrary from './WorkspaceLibrary.vue'
 import TimelinePanel from './TimelinePanel.vue'
 import { useFrameMetrics } from './useFrameMetrics'
 import CurveEditor from '../components/CurveEditor.vue'
+import AssetPanel from './AssetPanel.vue'
+import { htmlFor } from './htmlExport'
+import { exportPack } from './exportPack'
 import { catalog, defaults, styles, easingOf, isTimeline, timelineLength, sanitizeConfig, type Config, type Effect, type Frame } from './model'
 import { useAssets } from './assets'
 import { codeFor, extensionFor, type Format } from './export'
 import { usePlayback } from './usePlayback'
 import Preview from './Preview.vue'
 const config=ref<Config>(defaults()), baseline=ref<Config|null>(null)
-const name=ref(''), activeAsset=ref(''), status=ref(''), io=ref(''), format=ref<Format>('JavaScript'), stress=ref(1)
-const {store,error,favorite,save,importText}=useAssets()
+const activeAsset=ref(''), status=ref(''), format=ref<Format>('JavaScript'), stress=ref(1)
+const {store,error,favorite,save,importText,rename,archive,purge}=useAssets()
 const title=computed(()=>catalog.find(x=>x.id===config.value.effect)?.title)
 const total=computed(()=>Math.max(timelineLength(config.value),baseline.value?timelineLength(baseline.value):0))
 const {time,playing,speed,loop,seek,pause,play}=usePlayback(()=>{},()=>total.value)
@@ -30,10 +33,13 @@ function editCurve(i:number,event:Event){const raw=Number((event.target as HTMLI
 function preset(i:number){const s=styles[i];config.value={...config.value,duration:s.duration,curve:[...s.curve],bounce:s.bounce}}
 const output=computed(()=>codeFor(config.value,format.value))
 function addFrame(){if(config.value.frames.length>=30||config.value.effect==='spring'||!isTimeline(config.value.effect))return;const offset=Math.round(config.value.middle*100)/100;if(config.value.frames.some(x=>x.offset===offset))return;config.value.frames.push({offset,x:0,y:-20,scale:1,opacity:1});config.value.frames.sort((a,b)=>a.offset-b.offset);selectFrame(offset)}
-function saveAsset(revision=false){try{activeAsset.value=save(name.value,config.value,revision?activeAsset.value:undefined);status.value='预设已保存'}catch(e){status.value=String(e)}}
-function loadAsset(id:string,index:number){const a=store.value.assets.find(x=>x.id===id);if(!a)return;apply(a.versions[index].config);activeAsset.value=id;name.value=a.name;status.value='已载入版本 '+(index+1)}
-function importAssets(){try{importText(io.value);status.value='已合并导入（已有 ID 保留）'}catch(e){status.value=String(e)}}
-function download(text:string,filename:string){const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function saveAsset(name:string,revision=false){try{activeAsset.value=save(name,config.value,revision?activeAsset.value:undefined);status.value='预设已保存'}catch(e){status.value=String(e)}}
+function loadAsset(id:string,index:number){const a=store.value.assets.find(x=>x.id===id);if(!a)return;apply(a.versions[index].config);activeAsset.value=id;status.value='已载入版本 '+(index+1)}
+function importAssets(text:string){try{importText(text);status.value='已合并导入（已有 ID 保留）'}catch(e){status.value=String(e)}}
+function download(text:string|Blob,filename:string){const url=URL.createObjectURL(typeof text==='string'?new Blob([text],{type:'text/plain;charset=utf-8'}):text);const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function archiveAssets(ids:string[],restore:boolean){archive(ids,restore);if(!restore&&ids.includes(activeAsset.value))activeAsset.value=''}
+function compareVersion(c:Config){if(c.effect!==config.value.effect){status.value='请选择相同动效类型后对比';return}baseline.value=sanitizeConfig(c);scrub(0)}
+function exportHtml(){download(htmlFor(config.value),'motion-'+config.value.effect+'.html')}
 async function copy(){try{await navigator.clipboard.writeText(output.value);status.value='已复制'}catch{status.value='复制不可用，请手动选择文本'}}
 const {intervals,measuring,measure,perf}=useFrameMetrics()
 </script>
@@ -51,12 +57,11 @@ const {intervals,measuring,measure,perf}=useFrameMetrics()
    <label>位移 <output>{{config.distance}} px</output><input v-model.number="config.distance" type="range" min="0" max="240"></label>
    <label>回弹 <output>{{config.bounce.toFixed(2)}}</output><input v-model.number="config.bounce" type="range" min="0" max=".6" step=".01"></label>
    <label>级联间隔 <output>{{config.stagger}} ms</output><input v-model.number="config.stagger" type="range" min="0" max="200"></label>
+   <template v-if="config.effect==='spring'"><label class="ws-asset-check"><input type="checkbox" :checked="!!config.physics" @change="config.physics=($event.target as HTMLInputElement).checked?{mass:1,stiffness:180,damping:18,velocity:0}:undefined">物理弹簧模式</label><template v-if="config.physics"><label v-for="key in (['mass','stiffness','damping','velocity'] as const)" :key="key">{{key}} <output>{{config.physics[key]}}</output><input v-model.number="config.physics[key]" type="range" :min="key==='mass' ? .1 : key==='velocity' ? -2000 : key==='stiffness' ? 10 : 1" :max="key==='mass'?5:key==='stiffness'?800:key==='damping'?80:2000" :step="key==='mass' ? .1 : 1"></label></template></template>
    <h3>缓动曲线</h3><CurveEditor :easing-key="config.effect==='spring'?'spring':'custom'" :bezier="config.curve" :bounce="config.bounce" :duration="config.duration" :css="easingOf(config)" @drag="config.curve=$event"/>
    <div class="ws-curve-input"><label v-for="(_,i) in config.curve" :key="i">{{['X1','Y1','X2','Y2'][i]}}<input type="number" step=".05" :min="i%2?-1:0" :max="i%2?2:1" :value="config.curve[i]" @change="editCurve(i,$event)"></label></div><small>{{easingOf(config)}}</small>
    <template v-if="isTimeline(config.effect)&&config.effect!=='spring'"><h3>关键帧</h3><label>插入位置<input v-model.number="config.middle" type="range" min=".05" max=".95" step=".05"></label><button @click="addFrame">添加关键帧 {{Math.round(config.middle*100)}}%</button><div v-for="(frame,i) in config.frames" :key="i" class="ws-keyframe" :class="{selected:selected===frame.offset}"><button class="ws-frame-select" @click="selectFrame(frame.offset)">定位 {{Math.round(frame.offset*100)}}%</button><label>位置 %<input type="number" min="1" max="99" :value="Math.round(frame.offset*100)" @change="moveFrame(frame.offset,Number(($event.target as HTMLInputElement).value)/100)"></label><label v-for="key in (['x','y','scale','opacity'] as const)" :key="key">{{key}}<input type="number" :step="key==='scale'||key==='opacity' ? .1 : 1" :value="frame[key]" @change="editFrame(frame,key,$event)"></label><button @click="config.frames.splice(i,1);selected=null">删除</button></div></template>
-   </div><div v-show="inspector==='assets'" class="ws-inspector-content"><h3>本地预设与版本</h3><input v-model="name" aria-label="预设名称" placeholder="命名预设"><div class="ws-toolbar"><button @click="saveAsset()">保存新预设</button><button :disabled="!activeAsset" @click="saveAsset(true)">保存新版本</button></div><div v-for="a in store.assets" :key="a.id" class="ws-asset"><b>{{a.name}}</b><button v-for="(rev,i) in a.versions" :key="i" @click="loadAsset(a.id,i)">版本 {{a.versions.length-i}} · {{rev.at.slice(0,10)}}</button></div>
-   <textarea v-model="io" aria-label="资产 JSON" placeholder="粘贴资产 JSON（合并导入）"></textarea><div class="ws-toolbar"><button @click="importAssets">导入</button><button @click="download(JSON.stringify(store,null,2),'motion-assets.json')">导出资产</button></div>
-   </div><div v-show="inspector==='export'" class="ws-inspector-content"><h3>代码与 AI 导出</h3><select v-model="format" aria-label="导出格式"><option v-for="fmt in ['Vue','React','JavaScript','CSS','Tokens','AI']" :key="fmt">{{fmt}}</option></select><textarea readonly :value="output" aria-label="生成代码"></textarea><div class="ws-toolbar"><button @click="copy">复制</button><button @click="download(output,'motion-'+config.effect+'.'+extensionFor(format))">下载</button></div></div><p v-if="error||status" role="status" class="ws-status">{{error||status}}</p>
+   </div><div v-show="inspector==='assets'" class="ws-inspector-content"><AssetPanel :assets="store.assets" :active="activeAsset" @save="saveAsset" @load="loadAsset" @compare="compareVersion" @rename="rename" @archive="archiveAssets" @purge="purge" @import="importAssets" @export="download(JSON.stringify(store,null,2),'motion-assets.json')"/></div><div v-show="inspector==='export'" class="ws-inspector-content"><h3>代码与 AI 导出</h3><select v-model="format" aria-label="导出格式"><option v-for="fmt in ['Vue','React','JavaScript','CSS','Tokens','AI']" :key="fmt">{{fmt}}</option></select><textarea readonly :value="output" aria-label="生成代码"></textarea><div class="ws-toolbar"><button @click="copy">复制</button><button @click="download(output,'motion-'+config.effect+'.'+extensionFor(format))">下载</button><button @click="exportHtml">独立 HTML</button><button @click="download(exportPack(config),'motion-'+config.effect+'.zip')">完整 ZIP</button></div></div><p v-if="error||status" role="status" class="ws-status">{{error||status}}</p>
   </aside>
  </main>
 </template>

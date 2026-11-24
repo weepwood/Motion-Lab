@@ -38,3 +38,17 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - 时间轴：循环、速度、轨道刻度、A/B、关键帧定位和方向键移动；静态预览可控，布局/拖拽仍由真实 DOM 操作。
 - JS/Vue/React 的布局/手势导出生成可接入的 mount/dispose 示例，需将 packages/motion 拷贝至 ./motion-kit（或修改导入路径）；CSS 仅布局样式不模拟真实手势。已补充导出 JavaScript 真实挂载、布局重排、拖动及卸载浏览器测试；Vue/React 独立项目构建仍未执行。
 - 资产新建后立即绑定版本 ID；存储键保持不变。无真实截图视觉验收或跨浏览器最终结果之前不得宣称已发布。
+
+## 专业工具增强批次（依赖 PR #7）
+- 拖动关键帧、手势录制与单次回放、资产重命名/软删除/恢复/批量、同类型版本 A/B、物理弹簧采样、独立 HTML 导出；新增 AssetPanel 拆分。
+- HTML 内联 ESM 依赖源码，需实际运行验证；Vue/React 独立项目构建与 ZIP 包仍待完成。截图由 CI 采集，不等于人工视觉验收；性能指标是 rAF 估算而非 GPU/内存基准。保留旧存储键与已有资产。
+
+- PR #7 首次 CI 42 通过、1 失败：Firefox CSS 序列化差异。改用 DOMMatrixReadOnly.m41 数值断言，并同步到本分支。截图 artifact 总是上传；新增独立 HTML 实际运行回归。
+
+- 完整 ZIP 导出包含全部格式、HTML、配置及 motion-kit；独立 CI job 在临时 Vue / React 工程构建 8 种效果，React 仅为验证依赖。拆分 SettingsMechanisms。新增关键帧拖动和 ZIP 测试。均待 CI 验证。
+
+- 拖拽预览在按下时读取当前视觉矩阵，避免回弹中断跳变；释放速度来自最近有效采样，停顿超过阈值时归零，有限时长物理弹簧末帧归位。导出拖拽仍使用原先缓动复位，尚未与增强预览完全同步。新增三类阻尼端点/手势回放回归。
+
+## PR #8 质量收口
+- 首次 CI：Vue/React 独立构建成功；浏览器 57/58，Firefox 原 Vite 页面 setContent 后出现导航竞争。改用独立 data URL 新页面验证 HTML，保留真实交互断言。
+- Pages #7 两次部署失败（产物元数据缺失、同名重复），部署产物按 run_id/run_attempt 唯一命名，避免重试复用旧名称。待新 CI 和部署验证。

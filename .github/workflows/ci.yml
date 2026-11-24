@@ -31,8 +31,26 @@ jobs:
             playwright-report/
             test-results/
           if-no-files-found: ignore
+      - name: Upload visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-screenshots
+          path: test-results/**/*.png
+          if-no-files-found: ignore
       - name: Upload production bundle
         uses: actions/upload-artifact@v4
         with:
           name: motion-lab-dist
           path: dist/
+
+  export-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - name: Build generated Vue and React projects
+        run: node scripts/verify-exports.mjs

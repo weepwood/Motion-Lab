@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue'
 import { sanitizeConfig, catalog, type Config, type Effect } from './model'
 type Revision = { at: string; config: Config }
-export type Asset = { id: string; name: string; versions: Revision[] }
+export type Asset = { id: string; name: string; versions: Revision[]; deletedAt?: string }
 type Store = { version: 1; favorites: Effect[]; assets: Asset[] }
 const key = 'motion-lab-workspace-v1'
 function parse(raw: unknown): Store {
@@ -10,7 +10,7 @@ function parse(raw: unknown): Store {
   if(v.version !== 1 || !Array.isArray(v.assets) || !Array.isArray(v.favorites)) throw Error('不支持的资产版本')
   return {version:1,favorites:[...new Set(v.favorites.filter(x=>catalog.some(e=>e.id===x)))],assets:v.assets.slice(0,200).map(a=>{
     if(!a || typeof a.name!=='string'||typeof a.id!=='string'||!Array.isArray(a.versions)||!a.versions.length) throw Error('无效预设')
-    return {id:a.id.slice(0,100),name:a.name.slice(0,80),versions:a.versions.slice(0,30).map(r=>({at:String(r.at).slice(0,40),config:sanitizeConfig(r.config)}))}
+    return {id:a.id.slice(0,100),name:a.name.slice(0,80),deletedAt:typeof a.deletedAt==='string'?a.deletedAt.slice(0,40):undefined,versions:a.versions.slice(0,30).map(r=>({at:String(r.at).slice(0,40),config:sanitizeConfig(r.config)}))}
   })}
 }
 export function useAssets() {
@@ -30,5 +30,8 @@ export function useAssets() {
     return asset.id
   }
   function importText(text:string){if(text.length>2_000_000)throw Error('文件过大');const next=parse(JSON.parse(text));const known=new Set(store.value.assets.map(x=>x.id));const incoming=next.assets.filter(x=>{if(known.has(x.id))return false;known.add(x.id);return true});if(store.value.assets.length+incoming.length>200)throw Error('超出预设上限');store.value={version:1,favorites:[...new Set([...store.value.favorites,...next.favorites])],assets:[...store.value.assets,...incoming]}}
-  return {store,error,favorite,save,importText}
+  function rename(id:string,name:string){const asset=store.value.assets.find(x=>x.id===id);if(asset&&name.trim())asset.name=name.trim().slice(0,80)}
+  function archive(ids:string[],restore=false){const keys=new Set(ids);store.value.assets=store.value.assets.map(a=>keys.has(a.id)?{...a,deletedAt:restore?undefined:new Date().toISOString()}:a)}
+  function purge(ids:string[]){const keys=new Set(ids);store.value.assets=store.value.assets.filter(a=>!a.deletedAt||!keys.has(a.id))}
+  return {store,error,favorite,save,importText,rename,archive,purge}
 }
