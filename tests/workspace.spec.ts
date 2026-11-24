@@ -127,11 +127,15 @@ test('standalone HTML layout works without external modules',async({page})=>{
   const path=await download.path()
   const {readFile}=await import('node:fs/promises')
   const html=await readFile(path,'utf8')
-  await page.setContent(html)
-  const items=page.locator('[data-motion-item]')
-  await expect(items.first()).toHaveText('1')
-  await page.getByRole('button',{name:'运行布局转场'}).click()
-  await expect(items.first()).toHaveText('2')
+  // Open the standalone file in a fresh page; do not reuse the Vite HMR document.
+  const standalone=await page.context().newPage()
+  try {
+    await standalone.goto('data:text/html;charset=utf-8,'+encodeURIComponent(html))
+    const items=standalone.locator('[data-motion-item]')
+    await expect(items.first()).toHaveText('1')
+    await standalone.getByRole('button',{name:'运行布局转场'}).click()
+    await expect(items.first()).toHaveText('2')
+  } finally { await standalone.close() }
 })
 
 test('timeline marker drag and full export zip',async({page})=>{

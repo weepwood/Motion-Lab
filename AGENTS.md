@@ -48,3 +48,7 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - 完整 ZIP 导出包含全部格式、HTML、配置及 motion-kit；独立 CI job 在临时 Vue / React 工程构建 8 种效果，React 仅为验证依赖。拆分 SettingsMechanisms。新增关键帧拖动和 ZIP 测试。均待 CI 验证。
 
 - 拖拽预览在按下时读取当前视觉矩阵，避免回弹中断跳变；释放速度来自最近有效采样，停顿超过阈值时归零，有限时长物理弹簧末帧归位。导出拖拽仍使用原先缓动复位，尚未与增强预览完全同步。新增三类阻尼端点/手势回放回归。
+
+## PR #8 质量收口
+- 首次 CI：Vue/React 独立构建成功；浏览器 57/58，Firefox 原 Vite 页面 setContent 后出现导航竞争。改用独立 data URL 新页面验证 HTML，保留真实交互断言。
+- Pages #7 两次部署失败（产物元数据缺失、同名重复），部署产物按 run_id/run_attempt 唯一命名，避免重试复用旧名称。待新 CI 和部署验证。
