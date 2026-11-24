@@ -5,18 +5,21 @@ import {usePlayback} from './usePlayback'
 import {catalog,isTimeline,defaults,timelineLength,type Effect} from './model'
 import Preview from './Preview.vue'
 import GestureTrack from './GestureTrack.vue'
-import {projectHtml,trackLength} from './project'
+import {trackLength} from './project'
+import {projectHtml,projectCode,projectZip} from './projectExport'
+import CompositionStage from './CompositionStage.vue'
 import ParameterPanel from './ParameterPanel.vue'
 const {tracks,active,error,zoom,snap,total,current,add,remove,reorder,delay,moveGroup,snapshot,importProject}=useComposition()
 const {time,playing,loop,seek,pause,play}=usePlayback(()=>{},()=>total.value)
-const effects=catalog.filter(e=>isTimeline(e.id)||e.id==='drag')
+const effects=catalog
+const combined=ref(false)
 const selectedFrame=ref<number|null>(null),notice=ref('')
 watch(active,()=>{selectedFrame.value=null},{flush:'sync'})
 function addFrame(){const c=current.value?.config;if(!c||c.frames.length>=30||c.effect==='spring'||!isTimeline(c.effect))return;const offset=Math.round(c.middle*100)/100;if(c.frames.some(f=>f.offset===offset))return;c.frames.push({offset,x:0,y:-20,scale:1,opacity:1});c.frames.sort((a,b)=>a.offset-b.offset);selectFrame(offset)}
 function removeFrame(i:number){current.value?.config.frames.splice(i,1);selectedFrame.value=null}
 function selectFrame(offset:number){if(!current.value)return;selectedFrame.value=offset;pause();seek(current.value.delay+offset*current.value.config.duration)}
 function moveFrame(from:number,to:number){const c=current.value?.config;if(!c||!Number.isFinite(to))return;const offset=Math.round(Math.max(.01,Math.min(.99,to))*100)/100;const frame=c.frames.find(f=>f.offset===from);if(!frame||c.frames.some(f=>f!==frame&&f.offset===offset))return;frame.offset=offset;c.frames.sort((a,b)=>a.offset-b.offset);selectFrame(offset)}
-function download(text:string,name:string){const url=URL.createObjectURL(new Blob([text],{type:name.endsWith('.html')?'text/html':'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function download(text:string|Blob,name:string){const url=URL.createObjectURL(typeof text==='string'?new Blob([text],{type:name.endsWith('.html')?'text/html':'text/plain'}):text);const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 async function loadProject(e:Event){const input=e.target as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>2_000_000)throw Error('项目文件过大');importProject(await file.text());notice.value='已合并项目，原轨道保留'}catch(err){notice.value=String(err)}finally{input.value=''}}
 const width=computed(()=>Math.max(100,zoom.value*100)+'%')
 const percent=(ms:number)=>Math.max(0,Math.min(100,ms/total.value*100))
@@ -32,9 +35,9 @@ watch(total,()=>{seek(time.value)})
 </script>
 <template>
 <section class="ws-composition">
- <div class="ws-heading"><div><small>COMPOSITION</small><h2>多轨道编排</h2></div><div class="ws-toolbar"><button @click="add()">新增轨道</button><button @click="add('drag')">新增手势轨道</button></div></div>
- <p class="ws-hint">每条轨道拥有独立动效、延迟、时长及参数；共享全局播放时间。支持静态动效及录制手势轨迹；实时 FLIP 布局暂不支持。</p>
- <div class="ws-toolbar"><button @click="download(JSON.stringify(snapshot(),null,2),'motion-project.json')">导出编排 JSON</button><button @click="download(projectHtml(snapshot()),'motion-project.html')">导出编排 HTML</button><label class="ws-file">合并导入项目<input type="file" accept=".json,application/json" aria-label="导入编排项目" @change="loadProject"></label></div><p v-if="notice" role="status">{{notice}}</p><div class="ws-composition-preview"><template v-for="t in tracks.filter(t=>!t.muted)" :key="t.id"><GestureTrack v-if="t.config.effect==='drag'" :track="t" :time="time-t.delay" @record="t.gesture=$event"/><Preview v-else :config="t.config" :time="time-t.delay" :label="t.name" :stress="1" scene="interface"/></template></div>
+ <div class="ws-heading"><div><small>COMPOSITION</small><h2>多轨道编排</h2></div><div class="ws-toolbar"><button @click="add()">新增轨道</button><button @click="add('drag')">新增手势轨道</button><button @click="add('flip')">新增布局轨道</button></div></div>
+ <p class="ws-hint">每条轨道拥有独立动效、延迟、时长及参数；共享全局播放时间。支持静态动效、录制手势和实时测量的内置布局场景。</p>
+ <div class="ws-toolbar"><button @click="download(JSON.stringify(snapshot(),null,2),'motion-project.json')">导出编排 JSON</button><button @click="download(projectHtml(snapshot()),'motion-project.html')">导出编排 HTML</button><button @click="download(projectCode(snapshot(),'Vue'),'Composition.vue')">Vue</button><button @click="download(projectCode(snapshot(),'React'),'Composition.jsx')">React</button><button @click="download(projectZip(snapshot()),'motion-project.zip')">编排 ZIP</button><label class="ws-file">合并导入项目<input type="file" accept=".json,application/json" aria-label="导入编排项目" @change="loadProject"></label></div><p v-if="notice" role="status">{{notice}}</p><div class="ws-toolbar"><button :aria-pressed="!combined" @click="combined=false">独立预览</button><button :aria-pressed="combined" @click="combined=true">组合预览</button></div><CompositionStage v-if="combined" :tracks="tracks" :time="time"/><div v-else class="ws-composition-preview"><template v-for="t in tracks.filter(t=>!t.muted)" :key="t.id"><GestureTrack v-if="t.config.effect==='drag'" :track="t" :time="time-t.delay" @record="t.gesture=$event"/><CompositionStage v-else-if="t.config.effect==='flip'||t.config.effect==='shared'" :tracks="[t]" :time="time"/><Preview v-else :config="t.config" :time="time-t.delay" :label="t.name" :stress="1" scene="interface"/></template></div>
  <div class="ws-toolbar"><button @click="playing?pause():play()">{{playing?'暂停编排':'播放编排'}}</button><button @click="pause();seek(0)">归零</button><button :aria-pressed="loop" @click="loop=!loop">循环</button><label>缩放<select v-model.number="zoom" aria-label="编排缩放"><option :value="1">1×</option><option :value="2">2×</option><option :value="4">4×</option></select></label><label>吸附<select v-model.number="snap" aria-label="编排吸附"><option :value="0">关闭</option><option :value="20">20ms</option><option :value="50">50ms</option><option :value="100">100ms</option></select></label></div>
  <input type="range" aria-label="编排时间轴" min="0" :max="total" :value="Math.round(time)" @input="scrub">
  <div class="ws-composition-scroll"><div :style="{width}">
