@@ -61,3 +61,5 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - 编排轨道可拖动延迟并吸附；参数检查器拆分为 ParameterPanel，隐藏无关参数；聊天 FPS 生命周期拆分 useFps。编排模式独立检查区，旧单动效/资产不变。
 
 - 导出门禁新增实际 Chromium 运行 Vue/React 构建产物及 ZIP 解包/CRC 校验；基准输出 80 节点 30 次 FLIP 的 rAF 分位与取消后残余动画/节点连接状态。未提供实际 JS heap 数据或 GPU 掉帧。
+
+- #8 复测 58/58、Vue/React 8/8 并合并。#8 Pages 上传产物 ID 14923067016 后立即部署查询不到，随后 API 可查到该产物；触发重试并为后续版本添加部署前唯一元数据轮询，未宣称已部署。

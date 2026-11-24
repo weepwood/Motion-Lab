@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 concurrency:
@@ -28,6 +29,21 @@ jobs:
         with:
           path: dist/
           name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Wait for Pages artifact metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          for i in {1..18}; do
+            count=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" --jq ".artifacts[] | select(.name == \"$ARTIFACT_NAME\" and .expired == false) | .id" | wc -l) || count=0
+            if [ "$count" -eq 1 ]; then
+              echo "Pages artifact metadata is visible."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Pages artifact metadata not uniquely visible after polling"
+          exit 1
       - id: deployment
         uses: actions/deploy-pages@v4
         with:
