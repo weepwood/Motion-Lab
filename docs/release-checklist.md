@@ -22,3 +22,5 @@ PR #9 基线：80 节点、30 次连续 FLIP，Chromium 18.1/29.4 ms、Firefox 1
 - V3.4.0 发布专用工作流：主分支 CI 成功触发，限定 3.4.0 与精确 main SHA，等待同提交 Pages 成功；实际线上文件哈希、浏览器冒烟及导入导出通过后，打包已验收 dist，draft 下载验证、SHA256、公开 Release 与 tag SHA 检查。未运行成功前不得声称发布完成。
 
 - 响应式修复 45404101335：88/88，三浏览器截图复查通过，动态缩小 WebKit 页面 2078→964 CSS px；两轮长循环残留 0，Chromium GC 堆 +48696 B；WebKit 短时 P95 57ms 为后续观察项。发布门禁提交须再通过全量 CI。
+
+- #11 主分支 918c5da 的 CI 88/88、Pages 已成功。发布触发器 workflow_run 名称因 YAML 逗号解析错误未执行，改为 main push / 手动入口，等待精确 SHA 对应的 CI 和 Pages；不改变正式发布验收条件。

@@ -1,9 +1,8 @@
 name: Release V3.4.0
 on:
-  workflow_run:
-    workflows: [Build, typecheck and browser tests]
-    types: [completed]
+  push:
     branches: [main]
+  workflow_dispatch:
 permissions:
   contents: write
   actions: read
@@ -12,19 +11,18 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository && github.repository == 'weepwood/Motion-Lab'
+    if: github.ref == 'refs/heads/main' && github.repository == 'weepwood/Motion-Lab'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      SHA: ${{ github.event.workflow_run.head_sha }}
-      RUN_ID: ${{ github.event.workflow_run.id }}
+      SHA: ${{ github.sha }}
       TAG: v3.4.0
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -50,6 +48,24 @@ jobs:
             test "$(gh release view "$TAG" --json targetCommitish --jq '.targetCommitish')" = "$SHA"
           fi
           echo "publish=true" >> "$GITHUB_OUTPUT"
+      - name: Wait for complete CI of this exact commit
+        if: steps.gate.outputs.publish == 'true'
+        id: ci
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..120}; do
+            run=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" -f branch=main -f head_sha="$SHA" -f per_page=20 | jq -c --arg sha "$SHA" '.workflow_runs | map(select(.head_sha == $sha and .event == "push")) | first // {}')
+            result=$(jq -r '.conclusion // "pending"' <<< "$run")
+            if [ "$result" = success ]; then
+              echo "run_id=$(jq -r '.id' <<< "$run")" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$result" = failure ] || [ "$result" = cancelled ]; then echo "::error::CI $result for $SHA"; exit 1; fi
+            sleep 5
+          done
+          echo "::error::No successful full CI for $SHA"
+          exit 1
       - name: Wait for Pages deployment of this exact commit
         if: steps.gate.outputs.publish == 'true'
         run: |
@@ -66,7 +82,7 @@ jobs:
         if: steps.gate.outputs.publish == 'true'
         run: |
           set -euo pipefail
-          gh run download "$RUN_ID" --name motion-lab-dist --dir "$RUNNER_TEMP/release-dist"
+          gh run download "${{ steps.ci.outputs.run_id }}" --name motion-lab-dist --dir "$RUNNER_TEMP/release-dist"
           test -s "$RUNNER_TEMP/release-dist/index.html"
           test -s "$RUNNER_TEMP/release-dist/demo/index.html"
           test -s "$RUNNER_TEMP/release-dist/packages/motion/composition.js"
