@@ -19,7 +19,7 @@ function moveFrame(from:number,to:number){const c=current.value?.config;if(!c||!
 function download(text:string,name:string){const url=URL.createObjectURL(new Blob([text],{type:name.endsWith('.html')?'text/html':'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 async function loadProject(e:Event){const input=e.target as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>2_000_000)throw Error('项目文件过大');importProject(await file.text());notice.value='已合并项目，原轨道保留'}catch(err){notice.value=String(err)}finally{input.value=''}}
 const width=computed(()=>Math.max(100,zoom.value*100)+'%')
-const percent=(ms:number)=>ms/total.value*100
+const percent=(ms:number)=>Math.max(0,Math.min(100,ms/total.value*100))
 const dragging=ref<{id:string;pointer:number;startX:number;startDelay:number;span:number;width:number;draft:number}|null>(null)
 function beginDrag(e:PointerEvent,t:Track){if(e.button!==0)return;pause();active.value=t.id;const el=e.currentTarget as HTMLElement;const width=el.parentElement!.getBoundingClientRect().width;if(!width)return;dragging.value={id:t.id,pointer:e.pointerId,startX:e.clientX,startDelay:t.delay,span:total.value,width,draft:t.delay};try{el.setPointerCapture(e.pointerId)}catch{}}
 function moveTrack(e:PointerEvent){const d=dragging.value;if(!d||d.pointer!==e.pointerId)return;const raw=Math.max(0,Math.min(10000,d.startDelay+(e.clientX-d.startX)/d.width*d.span));d.draft=snap.value?Math.min(10000,Math.round(raw/snap.value)*snap.value):Math.round(raw)}

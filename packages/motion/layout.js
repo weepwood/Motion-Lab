@@ -4,9 +4,9 @@ const physicalRuns = new WeakMap()
 const captureVelocities = new WeakMap()
 function velocityAt(el){
  const run=physicalRuns.get(el)
- if(!run||running.get(el)!==run.animation||run.animation.playState==='finished'||run.animation.playState==='idle')return [0,0]
+ if(!run||running.get(el)!==run.animation||run.animation.playState==='finished'||run.animation.playState==='idle')return undefined
  const t=Number(run.animation.currentTime)||0, step=run.duration/(run.xs.length-1)
- if(step<=0)return [0,0]
+ if(step<=0)return undefined
  const i=Math.min(run.xs.length-2,Math.max(0,Math.floor(t/step)))
  return [(run.xs[i+1].value-run.xs[i].value)*1000/step,(run.ys[i+1].value-run.ys[i].value)*1000/step]
 }

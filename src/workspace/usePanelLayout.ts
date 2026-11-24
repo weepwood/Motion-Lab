@@ -7,7 +7,7 @@ export function usePanelLayout(){
  watch([leftWidth,rightWidth],()=>{try{localStorage.setItem('motion-lab-panels-v1',JSON.stringify({left:leftWidth.value,right:rightWidth.value}))}catch{}},{flush:'post'})
  let drag:{side:Side;id:number;start:number;width:number}|null=null
  const target=(side:Side)=>side==='left'?leftWidth:rightWidth
- function resizeStart(e:PointerEvent,side:Side){if(e.button!==0)return;drag={side,id:e.pointerId,start:e.clientX,width:target(side).value};(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)}
+ function resizeStart(e:PointerEvent,side:Side){if(e.button!==0)return;drag={side,id:e.pointerId,start:e.clientX,width:target(side).value};try{(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)}catch{/* synthetic or released pointer */}}
  function resizeMove(e:PointerEvent){if(!drag||drag.id!==e.pointerId)return;target(drag.side).value=clamp(drag.side,drag.width+(e.clientX-drag.start)*(drag.side==='left'?1:-1))}
  function resizeEnd(e:PointerEvent){if(drag?.id===e.pointerId)drag=null}
  function resizeKey(e:KeyboardEvent,side:Side){if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;e.preventDefault();target(side).value=clamp(side,target(side).value+(e.key==='ArrowRight'?10:-10)*(side==='left'?1:-1))}
