@@ -36,5 +36,5 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - PR #6 首次 CI：旧场景 31 项通过，工作台 6 项因同名选择器失败；53fa8a7 已分离无障碍名称并重跑，合并以新 CI 为准。
 - WorkspaceLibrary、TimelinePanel、useFrameMetrics、SettingsGeneral、chat/rows 拆分；沿用已有 CurveEditor、Vue、Lucide、Motion Kit，避免新增依赖。
 - 时间轴：循环、速度、轨道刻度、A/B、关键帧定位和方向键移动；静态预览可控，布局/拖拽仍由真实 DOM 操作。
-- JS/Vue/React 的布局/手势导出生成可接入的 mount/dispose 示例，需将 packages/motion 拷贝至 ./motion-kit（或修改导入路径）；CSS 仅布局样式不模拟真实手势。未执行生成代码的独立项目构建。
+- JS/Vue/React 的布局/手势导出生成可接入的 mount/dispose 示例，需将 packages/motion 拷贝至 ./motion-kit（或修改导入路径）；CSS 仅布局样式不模拟真实手势。已补充导出 JavaScript 真实挂载、布局重排、拖动及卸载浏览器测试；Vue/React 独立项目构建仍未执行。
 - 资产新建后立即绑定版本 ID；存储键保持不变。无真实截图视觉验收或跨浏览器最终结果之前不得宣称已发布。

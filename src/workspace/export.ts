@@ -20,7 +20,7 @@ function mountMotion(root) {
     const el = document.createElement("div");
     el.textContent = effect === "drag" ? "拖动" : String(i+1);
     Object.assign(el.style,{width:"64px",height:"64px",background:"#729cea",borderRadius:"12px",display:"grid",placeItems:"center",touchAction:"none",userSelect:"none"});
-    el.dataset.motionItem = "";
+    el.dataset.motionItem = ""; el.classList.add("motion-item");
     root.append(el); return el;
   });
   let expanded = false, detach, returning = null;
@@ -33,6 +33,7 @@ function mountMotion(root) {
       expanded = !expanded;
       items[0].style.width = expanded ? "128px" : "64px";
       items[0].style.height = expanded ? "128px" : "64px";
+      items[0].style.marginLeft = expanded ? "auto" : "0";
     }
     animateLayout(first,options);
   }

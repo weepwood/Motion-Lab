@@ -25,7 +25,7 @@ function selectFrame(offset:number){selected.value=offset;inspector.value='param
 function moveFrame(from:number,to:number){if(!Number.isFinite(to))return;const offset=Math.round(Math.max(.01,Math.min(.99,to))*100)/100;const frame=config.value.frames.find(x=>x.offset===from);if(!frame||config.value.frames.some(x=>x!==frame&&x.offset===offset))return;frame.offset=offset;config.value.frames.sort((a,b)=>a.offset-b.offset);selectFrame(offset)}
 function editFrame(frame:Frame,key:'x'|'y'|'scale'|'opacity',event:Event){const value=Number((event.target as HTMLInputElement).value);if(!Number.isFinite(value))return;const bounds=key==='scale'?[.1,3]:key==='opacity'?[0,1]:[-300,300];frame[key]=Math.max(bounds[0],Math.min(bounds[1],value))}
 function choose(id:Effect){config.value=defaults(id);activeAsset.value='';stress.value=1;baseline.value=null;selected.value=null;scrub(0)}
-function apply(c:Config){config.value=sanitizeConfig(c);selected.value=null;scrub(0)}
+function apply(c:Config){config.value=sanitizeConfig(c);selected.value=null;baseline.value=null;stress.value=1;scrub(0)}
 function editCurve(i:number,event:Event){const raw=Number((event.target as HTMLInputElement).value);if(Number.isFinite(raw))config.value.curve[i]=Math.max(i%2?-1:0,Math.min(i%2?2:1,raw))}
 function preset(i:number){const s=styles[i];config.value={...config.value,duration:s.duration,curve:[...s.curve],bounce:s.bounce}}
 const output=computed(()=>codeFor(config.value,format.value))

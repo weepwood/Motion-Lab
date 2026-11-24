@@ -8,7 +8,7 @@ const enabled=computed(()=>isTimeline(props.config.effect))
 const percent=(ms:number)=>Math.max(0,Math.min(100,props.total?ms/props.total*100:0))
 const ticks=computed(()=>Array.from({length:5},(_,i)=>Math.round(props.total*i/4)))
 function scrub(e:MouseEvent){if(!enabled.value)return;const r=(e.currentTarget as HTMLElement).getBoundingClientRect();if(r.width)emit('seek',Math.round(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*props.total))}
-function move(e:KeyboardEvent,offset:number){if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;e.preventDefault();emit('move',offset,offset+(e.key==='ArrowRight'?.01:-.01))}
+function move(e:KeyboardEvent,offset:number){if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;e.preventDefault();emit('move',offset,offset+(e.key==='ArrowRight' ? .01 : -.01))}
 </script>
 <template>
 <section class="ws-timeline">
