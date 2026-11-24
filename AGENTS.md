@@ -59,3 +59,5 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - attachSpringDrag 共享预览/导出运行时；重按读取视觉矩阵并承接位置，释放速度按近期指针采样估计；不宣称所有转场的速度连续。
 
 - 编排轨道可拖动延迟并吸附；参数检查器拆分为 ParameterPanel，隐藏无关参数；聊天 FPS 生命周期拆分 useFps。编排模式独立检查区，旧单动效/资产不变。
+
+- 导出门禁新增实际 Chromium 运行 Vue/React 构建产物及 ZIP 解包/CRC 校验；基准输出 80 节点 30 次 FLIP 的 rAF 分位与取消后残余动画/节点连接状态。未提供实际 JS heap 数据或 GPU 掉帧。

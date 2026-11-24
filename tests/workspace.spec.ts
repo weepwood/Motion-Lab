@@ -192,3 +192,25 @@ test('independent composition tracks, snap and reload',async({page})=>{
  await page.reload();await page.getByRole('button',{name:'多轨道',exact:true}).click()
  await expect(page.locator('.ws-composition-row')).toHaveCount(2)
 })
+
+test('repeat interaction benchmark and resource cleanup',async({page,browserName},testInfo)=>{
+ await page.goto('/?workspace=1')
+ const results=await page.evaluate(async()=>{
+  const {captureLayout,animateLayout,cancelLayout}=await import(/* @vite-ignore */ new URL('./packages/motion/index.js',location.href).href)
+  const root=document.createElement('div');root.style.cssText='display:flex;flex-wrap:wrap;position:fixed;inset:0;pointer-events:none'
+  document.body.append(root)
+  const items=Array.from({length:80},()=>{const el=document.createElement('div');el.style.cssText='width:24px;height:24px;margin:2px';root.append(el);return el})
+  const times:number[]=[];let last=performance.now()
+  for(let i=0;i<30;i++){
+   const before=captureLayout(items);root.append(root.firstElementChild!)
+   animateLayout(before,{duration:100})
+   await new Promise<void>(resolve=>requestAnimationFrame(()=>{const now=performance.now();times.push(now-last);last=now;resolve()}))
+  }
+  cancelLayout(items);const remaining=items.reduce((sum,el)=>sum+el.getAnimations().length,0)
+  root.remove();const detached=items.every(el=>!el.isConnected);times.sort((a,b)=>a-b)
+  return {samples:times.length,p50:times[Math.floor(times.length/2)],p95:times[Math.floor((times.length-1)*.95)],remaining,detached}
+ })
+ expect(results.samples).toBe(30);expect(results.remaining).toBe(0);expect(results.detached).toBeTruthy()
+ const {writeFile}=await import('node:fs/promises')
+ await writeFile(testInfo.outputPath('benchmark.json'),JSON.stringify({browser:browserName,...results},null,2))
+})
