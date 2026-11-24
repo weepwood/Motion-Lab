@@ -4,8 +4,8 @@ export function usePanelLayout(){
  const mobile=ref(matchMedia('(max-width:760px)').matches)
  const leftOpen=ref(!mobile.value),rightOpen=ref(!mobile.value),leftWidth=ref(244),rightWidth=ref(326)
  const media=matchMedia('(max-width:760px)')
- function responsive(e:MediaQueryListEvent){mobile.value=e.matches;leftOpen.value=!e.matches;rightOpen.value=!e.matches}
- onMounted(()=>media.addEventListener('change',responsive));onBeforeUnmount(()=>media.removeEventListener('change',responsive))
+ function responsive(){const next=media.matches;if(next===mobile.value)return;mobile.value=next;leftOpen.value=!next;rightOpen.value=!next}
+ onMounted(()=>{media.addEventListener('change',responsive);window.addEventListener('resize',responsive);responsive()});onBeforeUnmount(()=>{media.removeEventListener('change',responsive);window.removeEventListener('resize',responsive)})
  function toggleLeft(){leftOpen.value=!leftOpen.value;if(mobile.value&&leftOpen.value)rightOpen.value=false}
  function toggleRight(){rightOpen.value=!rightOpen.value;if(mobile.value&&rightOpen.value)leftOpen.value=false}
  const clamp=(side:Side,n:number)=>Math.max(side==='left'?180:240,Math.min(side==='left'?400:460,n))
