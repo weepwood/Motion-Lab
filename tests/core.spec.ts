@@ -114,8 +114,21 @@ test('scroll saver accepts arbitrary row keys without CSS selector injection', a
 })
 
 test('storage preserves zero overrides and falls back to inherited easing', async ({ page }) => {
+  // Seed before Vue loads; pagehide intentionally flushes live settings on reload.
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('motion-lab-settings-v3')) {
+      localStorage.setItem('motion-lab-settings-v3', JSON.stringify({
+        easing: 'soft', overrides: { send: { duration: 0, easing: 'invalid' } }
+      }))
+    }
+  })
   await page.goto('/')
-  await page.evaluate(() => localStorage.setItem('motion-lab-settings-v3', JSON.stringify({ overrides: { send: { duration: 0, easing: 'invalid' } } })))
+  const state = () => page.locator('.app-shell').evaluate(el => {
+    const css = getComputedStyle(el)
+    return { duration: css.getPropertyValue('--dur-send').trim(),
+      inherited: css.getPropertyValue('--ease-send').trim() === css.getPropertyValue('--ease').trim() }
+  })
+  await expect.poll(state).toEqual({ duration: '0ms', inherited: true })
   await page.reload()
-  await expect.poll(() => page.locator('.app-shell').evaluate(el => getComputedStyle(el).getPropertyValue('--dur-send').trim())).toBe('0ms')
+  await expect.poll(state).toEqual({ duration: '0ms', inherited: true })
 })
