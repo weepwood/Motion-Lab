@@ -1,0 +1,16 @@
+{
+  "name": "motion-kit",
+  "version": "1.0.1",
+  "description": "Zero-dependency web motion toolkit: rAF batching, keyed animation instances, dual-curve flights, parabola flights, ripples, damped swipe gestures, scroll anchoring and view-transition reveals. Principles distilled from an independent study of Telegram Web's animation architecture.",
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": "./index.js",
+    "./tokens.css": "./tokens.css"
+  },
+  "files": ["*.js", "*.d.ts", "tokens.css", "README.md"],
+  "license": "MIT",
+  "keywords": ["animation", "waapi", "motion", "ripple", "gesture", "view-transitions", "zero-dependency"]
+}

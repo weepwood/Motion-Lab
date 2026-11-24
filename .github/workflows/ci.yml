@@ -14,11 +14,13 @@ jobs:
           node-version: '22'
       - name: Install
         run: npm install --no-audit --no-fund
-      - name: Typecheck and build
+      - name: CI gate 1 · motion-kit import smoke
+        run: npm run check:pkg
+      - name: Typecheck and build (stages demo into dist/)
         run: npm run build
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-      - name: Browser interaction and stress tests
+      - name: CI gate 2+3 · app and demo interaction tests (console-clean)
         run: npm run test:e2e
       - name: Upload diagnostics
         if: failure()

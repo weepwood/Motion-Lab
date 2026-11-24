@@ -1,12 +1,41 @@
 /**
- * Motion primitives for Motion Lab.
+ * UI-layer motion adapter.
  *
- * Everything here is an original implementation. Curves, the spring solver and
- * the send "flight" only use transform / opacity so the compositor can run them.
+ * Since v3.2 the actual engine, curve maths and effect implementations live in
+ * the dependency-free `packages/motion` toolkit (motion-kit). This file keeps
+ * only what belongs to the app layer:
+ *
+ *  - the easing presets shown in the settings UI (labels/descriptions);
+ *  - thin wrappers that pipe the app's settings/mechanism parameters into the
+ *    toolkit's APIs, keeping the signatures App.vue already uses;
+ *  - re-exports of the toolkit primitives so the rest of the app keeps one
+ *    import path.
  */
+
+import {
+  CURVES,
+  bezierCss as pkgBezierCss,
+  bezierValue as pkgBezierValue,
+  clamp as pkgClamp,
+  springValue as pkgSpringValue,
+  springCss as pkgSpringCss,
+  supportsLinearEasing as pkgSupportsLinear,
+  play as pkgPlay,
+  settle as pkgSettle,
+  flyClone,
+  flyParabola,
+  burstParticles,
+  claimAnimation,
+  cancelAnimationByKey,
+  holdHeavyAnimations,
+  revealFrom as pkgRevealFrom
+} from '../packages/motion/index.js'
+import type { MechanismParams } from './settings'
 
 export type Bezier = [number, number, number, number]
 export type EasingKey = 'telegram' | 'soft' | 'snappy' | 'spring' | 'custom'
+
+/* ---------------------------------------------- UI easing presets (layer 2) */
 
 export interface EasingMeta {
   label: string
@@ -24,16 +53,26 @@ export const easingMeta: Record<EasingKey, EasingMeta> = {
 
 export const easingOrder: EasingKey[] = ['telegram', 'soft', 'snappy', 'spring', 'custom']
 
+/** Telegram Web's standard UI curve — the token almost every tweb transition uses. */
+export const TWEB_STANDARD: Bezier = CURVES.standard
+
 /** Used when the browser does not understand CSS `linear()` easing. */
-export const SPRING_FALLBACK: Bezier = [0.34, 1.56, 0.64, 1]
+export const SPRING_FALLBACK: Bezier = CURVES.overshoot
 const DEFAULT_BEZIER: Bezier = [0.23, 1, 0.32, 1]
 
-const round = (n: number, digits = 3) => Number(n.toFixed(digits))
-export const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n))
+/* --------------------------------------- primitive re-exports (motion-kit) */
 
-export function bezierCss(b: Bezier): string {
-  return `cubic-bezier(${b.map(n => round(n)).join(', ')})`
-}
+export const clamp = pkgClamp
+export const bezierCss = pkgBezierCss
+export const bezierValue = pkgBezierValue
+export const springValue = pkgSpringValue
+export const springCss = pkgSpringCss
+export const supportsLinearEasing = pkgSupportsLinear
+export const play = pkgPlay
+export const settle = pkgSettle
+export { claimAnimation, holdHeavyAnimations }
+
+/* ------------------------------------------------------- preset resolution */
 
 export function bezierFor(key: EasingKey, custom: Bezier): Bezier {
   if (key === 'custom') return custom
@@ -41,178 +80,86 @@ export function bezierFor(key: EasingKey, custom: Bezier): Bezier {
   return easingMeta[key].bezier ?? DEFAULT_BEZIER
 }
 
-/**
- * Damped harmonic oscillator, normalised so the motion settles at t = 1.
- * `bounce` 0 = critically damped, 0.6 = very bouncy.
- */
-export function springValue(t: number, bounce: number): number {
-  if (t <= 0) return 0
-  if (t >= 1) return 1
-  const zeta = clamp(1 - bounce, 0.3, 1)
-  const omega = 12
-  if (zeta > 0.999) return 1 - Math.exp(-omega * t) * (1 + omega * t)
-  const wd = omega * Math.sqrt(1 - zeta * zeta)
-  return 1 - Math.exp(-zeta * omega * t) * (Math.cos(wd * t) + (zeta * omega / wd) * Math.sin(wd * t))
-}
-
-/** Evaluate a CSS cubic-bezier at progress x (0..1). */
-export function bezierValue(b: Bezier, x: number): number {
-  if (x <= 0) return 0
-  if (x >= 1) return 1
-  const [x1, y1, x2, y2] = b
-  const curve = (t: number, p1: number, p2: number) => {
-    const u = 1 - t
-    return 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t
-  }
-  let lo = 0
-  let hi = 1
-  let t = x
-  for (let i = 0; i < 40; i++) {
-    const v = curve(t, x1, x2)
-    if (Math.abs(v - x) < 1e-5) break
-    if (v < x) lo = t
-    else hi = t
-    t = (lo + hi) / 2
-  }
-  return curve(t, y1, y2)
-}
-
 export function easingValue(key: EasingKey, custom: Bezier, bounce: number, x: number): number {
   if (key === 'spring') return springValue(x, bounce)
   return bezierValue(bezierFor(key, custom), x)
-}
-
-let linearSupport: boolean | undefined
-export function supportsLinearEasing(): boolean {
-  if (linearSupport === undefined) {
-    try {
-      linearSupport = typeof CSS !== 'undefined' && CSS.supports('transition-timing-function', 'linear(0, 0.5, 1)')
-    } catch {
-      linearSupport = false
-    }
-  }
-  return linearSupport
-}
-
-export function springCss(bounce: number): string {
-  if (!supportsLinearEasing()) return bezierCss(SPRING_FALLBACK)
-  const steps = 48
-  const points: number[] = []
-  for (let i = 0; i <= steps; i++) points.push(round(springValue(i / steps, bounce), 4))
-  return `linear(${points.join(', ')})`
 }
 
 export function easingCss(key: EasingKey, custom: Bezier, bounce: number): string {
   return key === 'spring' ? springCss(bounce) : bezierCss(bezierFor(key, custom))
 }
 
-/**
- * element.animate() throws for easing strings the engine does not know.
- * Always go through this helper so an exotic curve can never break an interaction.
- */
-export function play(el: Element, frames: Keyframe[], duration: number, easing: string, extra: KeyframeAnimationOptions = {}): Animation | null {
-  if (duration <= 0 || typeof el.animate !== 'function') return null
-  try {
-    return el.animate(frames, { ...extra, duration, easing })
-  } catch {
-    return el.animate(frames, { ...extra, duration, easing: 'ease-out' })
-  }
-}
+/* -------------------------------------------------- app-level flight API */
 
-export async function settle(animation: Animation | null | undefined): Promise<void> {
-  if (!animation) return
-  try {
-    await animation.finished
-  } catch {
-    // Cancelled on purpose (new send, chat switch, unmount).
-  }
-}
-
-let flight: { wrapper: HTMLElement; animations: Animation[] } | null = null
+/** A single send flight at a time, like tweb's sendFlights. */
+const FLIGHT_KEY = { send: true }
 
 export function cancelFlight() {
-  if (!flight) return
-  flight.animations.forEach(a => a.cancel())
-  flight.wrapper.remove()
-  flight = null
+  cancelAnimationByKey(FLIGHT_KEY)
 }
 
 /**
- * Send flight (FLIP): clone the real bubble at its final position, then play it
- * backwards from the composer. X and Y run on slightly different durations so the
- * path arcs instead of moving in a straight line.
- * The clone is appended inside `container` so it inherits the active theme variables,
- * and wrapped in an element carrying the row classes so it keeps the same look.
+ * Send flight: clone the real bubble, fly it from the composer with separate
+ * X/Y curves (mechanism params, tier 3), cross-fade into the real bubble on
+ * landing. Interruption-safe via the toolkit's keyed instances.
  */
-export async function flyBubble(target: HTMLElement, from: DOMRect, container: HTMLElement, duration: number, easing: string, rowClass = ''): Promise<void> {
-  cancelFlight()
-  const to = target.getBoundingClientRect()
-  if (duration <= 0 || to.width <= 0 || to.height <= 0) return
-  const wrapper = document.createElement('div')
-  // The wrapper mimics the message row so row-scoped bubble styles (colour, radius, tail) still apply.
-  wrapper.className = ('flight-layer ' + rowClass).trim()
-  Object.assign(wrapper.style, { left: to.left + 'px', top: to.top + 'px', width: to.width + 'px', height: to.height + 'px' })
-  const ghost = target.cloneNode(true) as HTMLElement
-  ghost.classList.add('flight-ghost')
-  ghost.removeAttribute('data-mid')
-  ghost.setAttribute('aria-hidden', 'true')
-  wrapper.append(ghost)
-  container.append(wrapper)
-
-  const dx = from.left + 14 - to.left
-  const dy = from.top + from.height / 2 - (to.top + to.height / 2)
-  const scale = clamp(from.height / Math.max(to.height, 1), 0.82, 1)
-  const xAnim = play(wrapper, [
-    { transform: `translate3d(${dx}px,0,0)` },
-    { transform: 'translate3d(0,0,0)' }
-  ], duration, easing, { fill: 'both' })
-  const yAnim = play(ghost, [
-    { transform: `translate3d(0,${dy}px,0) scale(${scale})`, opacity: 0.4 },
-    { transform: 'translate3d(0,0,0) scale(1)', opacity: 1 }
-  ], Math.round(duration * 0.82), easing, { fill: 'both' })
-  const animations = [xAnim, yAnim].filter((a): a is Animation => a !== null)
-  const current = { wrapper, animations }
-  flight = current
-  await Promise.all(animations.map(settle))
-  if (flight === current) flight = null
-  wrapper.remove()
+export async function flyBubble(
+  target: HTMLElement,
+  from: DOMRect,
+  container: HTMLElement,
+  duration: number,
+  mech: Pick<MechanismParams, 'sendCurveX' | 'sendCurveY' | 'sendLandFade'>,
+  reveal: (() => void) | null,
+  rowClass = ''
+): Promise<void> {
+  await flyClone({
+    source: target,
+    from,
+    target,
+    container,
+    duration,
+    curveX: mech.sendCurveX,
+    curveY: mech.sendCurveY,
+    landFade: mech.sendLandFade,
+    key: FLIGHT_KEY,
+    reveal: reveal ?? undefined,
+    className: ('flight-layer ' + rowClass).trim()
+  })
 }
 
-/** Fly a small element (e.g. a reaction emoji) from one rect to another. */
-export async function flyEmoji(emoji: string, from: DOMRect, to: DOMRect, container: HTMLElement, duration: number, easing: string): Promise<void> {
-  if (duration <= 0) return
-  const node = document.createElement('span')
-  node.className = 'emoji-flight'
-  node.textContent = emoji
-  Object.assign(node.style, { left: to.left + to.width / 2 + 'px', top: to.top + to.height / 2 + 'px' })
-  container.append(node)
-  const dx = from.left + from.width / 2 - (to.left + to.width / 2)
-  const dy = from.top + from.height / 2 - (to.top + to.height / 2)
-  const anim = play(node, [
-    { transform: `translate(-50%,-50%) translate3d(${dx}px,${dy}px,0) scale(1.6)` },
-    { transform: `translate(-50%,-50%) translate3d(${dx * 0.35}px,${dy * 0.35 - 36}px,0) scale(1.9)`, offset: 0.45 },
-    { transform: 'translate(-50%,-50%) translate3d(0,0,0) scale(1)' }
-  ], duration, easing, { fill: 'both' })
-  await settle(anim)
-  node.remove()
+/**
+ * Reaction flight: the emoji flies along an analytic parabola whose landing
+ * reveal fires early (mechanism params, tier 3).
+ */
+export async function flyEmoji(
+  emoji: string,
+  from: DOMRect,
+  to: DOMRect,
+  container: HTMLElement,
+  duration: number,
+  mech: Pick<MechanismParams, 'reactionElevation' | 'reactionLanding'>,
+  options: { key?: unknown; scaleStart?: number; reveal?: () => void } = {}
+): Promise<void> {
+  // The flight lands on the reaction icon inside the chip; a plain rect target.
+  await flyParabola({
+    source: emoji,
+    from,
+    target: { left: to.left, top: to.top, width: to.width, height: to.height },
+    container,
+    duration,
+    elevation: mech.reactionElevation,
+    landing: mech.reactionLanding,
+    key: options.key,
+    scaleStart: options.scaleStart ?? 1.6,
+    reveal: options.reveal,
+    className: 'emoji-flight'
+  })
 }
 
-/** Burst of particles around a point; skipped entirely in power-saving mode. */
+/** Reaction particle burst (power-saving / heavy effects gate upstream). */
 export function burst(emoji: string, at: DOMRect, container: HTMLElement, duration: number) {
-  if (duration <= 0) return
-  const count = 7
-  for (let i = 0; i < count; i++) {
-    const p = document.createElement('span')
-    p.className = 'particle'
-    p.textContent = emoji
-    Object.assign(p.style, { left: at.left + at.width / 2 + 'px', top: at.top + at.height / 2 + 'px' })
-    container.append(p)
-    const angle = (Math.PI * 2 * i) / count - Math.PI / 2
-    const dist = 34 + (i % 3) * 10
-    const anim = play(p, [
-      { transform: 'translate(-50%,-50%) scale(.3)', opacity: 1 },
-      { transform: `translate(-50%,-50%) translate(${Math.cos(angle) * dist}px,${Math.sin(angle) * dist}px) scale(.9)`, opacity: 0 }
-    ], duration, 'cubic-bezier(.2,.8,.2,1)', { fill: 'both' })
-    void settle(anim).then(() => p.remove())
-  }
+  return burstParticles(emoji, at, container, duration, 'particle')
 }
+
+/** Theme/state circular reveal (View Transitions), used by App.setTheme. */
+export const revealFrom = pkgRevealFrom

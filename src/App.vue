@@ -1,18 +1,19 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   ArrowDown, ArrowLeft, Bookmark, CheckCheck, Copy, FileText, FlaskConical, Forward, Gauge, Image as ImageIcon, Info,
   ListChecks, Menu, MessageCircle, Mic, Moon, MoreVertical, Paperclip, Reply, Search, Send, Settings, Settings2,
   Smile, Sparkles, Trash2, X, Zap
 } from 'lucide-vue-next'
 import { vRipple } from './ripple'
-import { burst, cancelFlight, flyBubble, flyEmoji, play, settle } from './motion'
+import { burst, cancelFlight, flyBubble, flyEmoji, holdHeavyAnimations, play, settle } from './motion'
+import { createScrollSaver } from '../packages/motion/index.js'
 import {
-  animationList, durationFor, easing, isEnabled, microDuration, motionDisabled, powerSavingActive, resolvedTheme,
-  settings, system, watchEnvironment, type DemoKey, type SettingsTab, type ThemeMode
+  animationList, durationFor, easing, easingFor, effectiveLevel, isEnabled, microDuration, moveDurationFor,
+  powerSavingActive, resolvedTheme, settings, system, watchEnvironment, type DemoKey, type SettingsTab, type ThemeMode
 } from './settings'
-import SettingsPanel from './components/SettingsPanel.vue'
-
+// Async so the settings UI stays out of the critical first paint (P1 perf).
+const SettingsPanel = defineAsyncComponent(() => import('./components/SettingsPanel.vue'))
 /* ------------------------------------------------------------------ data */
 
 type Message = { id: number; text: string; at: number; mine: boolean; reaction?: string; replyTo?: number }
@@ -21,9 +22,12 @@ type Chat = { id: number; name: string; avatar: string; color: string; status: s
 const MIN = 60_000
 const DAY_MIN = 1440
 const PAGE = 120
-const SWIPE_TRIGGER = 56
 const boot = Date.now()
 const ago = (minutes: number) => boot - minutes * MIN
+
+/** tweb sweep maths: damped finger-following, trigger at a fraction of the cap. */
+const swipeMaxPx = () => settings.mech.swipeMax
+const swipeTriggerPx = () => Math.round(settings.mech.swipeMax * settings.mech.swipeTrigger)
 
 const chats = reactive<Chat[]>([
   { id: 1, name: 'Motion Design', avatar: 'MD', color: '#5caffa', status: '128 位成员', unread: 0, group: true, pinned: true },
@@ -67,7 +71,7 @@ const stageRef = ref<HTMLElement | null>(null)
 const scrollEl = ref<HTMLElement | null>(null)
 const composer = ref<HTMLTextAreaElement | null>(null)
 const searchInput = ref<HTMLInputElement | null>(null)
-const settingsRef = ref<InstanceType<typeof SettingsPanel> | null>(null)
+const settingsRef = ref<{ go: (tab: SettingsTab) => void; back: () => void } | null>(null)
 
 const activeId = ref(1)
 const text = ref('')
@@ -108,6 +112,9 @@ function later(fn: () => void, ms: number) {
   timers.add(t)
 }
 const wait = (ms: number) => new Promise<void>(resolve => later(resolve, ms))
+
+/** Keeps the viewport pinned to a visible message row across list mutations (tweb scrollSaver). */
+const scrollSaver = createScrollSaver(() => scrollEl.value, '.message-row', 'data-row')
 
 /* ------------------------------------------------------------------ derived */
 
@@ -207,14 +214,27 @@ const cssVars = computed(() => {
   const vars: Record<string, string> = {
     '--ease': easing.value,
     '--dur-micro': microDuration.value + 'ms',
-    '--dur-flash': (motionDisabled.value ? 0 : 1400 * settings.timeScale) + 'ms',
+    '--dur-flash': (effectiveLevel.value === 0 ? 0 : 1400 * settings.timeScale) + 'ms',
     '--msg-size': settings.textSize + 'px',
     '--bubble-r': settings.bubbleRadius + 'px',
-    '--meta-w': settings.timeFormat === '12h' ? '60px' : '40px'
+    '--meta-w': settings.timeFormat === '12h' ? '60px' : '40px',
+    // Column push (tweb slideNavigation): leaving page parallaxes away and dims.
+    '--nav-parallax': settings.mech.navParallax + '%',
+    '--nav-dim': String(settings.mech.navDim) + '%'
   }
-  for (const item of animationList) vars['--dur-' + item.key] = durationFor(item.key) + 'ms'
+  for (const item of animationList) {
+    vars['--dur-' + item.key] = durationFor(item.key) + 'ms'
+    // Displacement collapses to 0 at animation level 1: motions snap, fades stay.
+    vars['--dur-' + item.key + '-move'] = moveDurationFor(item.key) + 'ms'
+    vars['--ease-' + item.key] = easingFor(item.key)
+  }
+  // motion-kit bridge: package effects (ripple…) read the same live tokens (tweb reads --ripple-duration back from CSS).
+  vars['--mk-ripple-duration'] = durationFor('ripple') + 'ms'
+  vars['--mk-ripple-easing'] = easingFor('ripple')
   return vars
 })
+
+const levelClass = computed(() => effectiveLevel.value === 0 ? 'motion-off' : effectiveLevel.value === 1 ? 'anim-level-1' : '')
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -282,7 +302,7 @@ watch(folder, () => { void nextTick(measureIndicator) })
 
 /* ------------------------------------------------------------------ theme */
 
-type ViewTransitionDoc = { startViewTransition?: (cb: () => Promise<void>) => { ready: Promise<void> } }
+type ViewTransitionDoc = { startViewTransition?: (cb: () => Promise<void>) => { ready: Promise<void>; finished?: Promise<void> } }
 async function setTheme(mode: ThemeMode, x = innerWidth - 48, y = 48) {
   const before = resolvedTheme.value
   const after = mode === 'system' ? (system.dark ? 'dark' : 'light') : mode
@@ -292,12 +312,16 @@ async function setTheme(mode: ThemeMode, x = innerWidth - 48, y = 48) {
   if (before === after || !duration || typeof doc.startViewTransition !== 'function') { await apply(); return }
   try {
     const transition = doc.startViewTransition(apply)
+    // P1 perf: hold decorative rendering while the snapshot reveals (tweb pauses heavy animations).
+    holdHeavyAnimations(transition.finished ?? transition.ready, 2000)
     await transition.ready
     const radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))
+    // tweb: entering night takes longer than leaving (600 ms vs 500 ms => ×0.83).
+    const ms = Math.round(before === 'dark' ? duration * 0.83 : duration)
     play(document.documentElement, [
       { clipPath: `circle(0px at ${x}px ${y}px)` },
       { clipPath: `circle(${radius}px at ${x}px ${y}px)` }
-    ], duration, easing.value, { pseudoElement: '::view-transition-new(root)' })
+    ], ms, easingFor('themeReveal'), { pseudoElement: '::view-transition-new(root)' })
   } catch {
     await apply()
   }
@@ -309,6 +333,8 @@ watch(resolvedTheme, t => {
   document.documentElement.dataset.theme = t
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'dark' ? '#212121' : '#ffffff')
 }, { immediate: true })
+// Sync the effective animation level for motion-kit effects (ripple degradation).
+watch(effectiveLevel, level => { document.documentElement.dataset.motionLevel = String(level) }, { immediate: true })
 
 /* ------------------------------------------------------------------ navigation */
 
@@ -364,12 +390,20 @@ function changeChat(id: number) {
 
 async function loadOlder() {
   const el = scrollEl.value
-  const oldHeight = el?.scrollHeight ?? 0
-  const oldTop = el?.scrollTop ?? 0
   quiet.value = true
-  visibleCount.value += PAGE
-  await nextTick()
-  if (el) el.scrollTop = oldTop + el.scrollHeight - oldHeight
+  // tweb scrollSaver: pin the topmost visible row, then compensate scrollTop after the DOM change.
+  if (settings.mech.scrollAnchor && el) {
+    scrollSaver.save()
+    visibleCount.value += PAGE
+    await nextTick()
+    scrollSaver.restore()
+  } else {
+    const oldHeight = el?.scrollHeight ?? 0
+    const oldTop = el?.scrollTop ?? 0
+    visibleCount.value += PAGE
+    await nextTick()
+    if (el) el.scrollTop = oldTop + el.scrollHeight - oldHeight
+  }
   later(() => { quiet.value = false }, 80)
 }
 
@@ -380,8 +414,19 @@ async function jumpTo(id?: number) {
   const needed = messages.value.length - index
   if (needed > visibleCount.value) {
     quiet.value = true
-    visibleCount.value = Math.ceil(needed / PAGE) * PAGE
-    await nextTick()
+    if (settings.mech.scrollAnchor && scrollEl.value) {
+      scrollSaver.save()
+      visibleCount.value = Math.ceil(needed / PAGE) * PAGE
+      await nextTick()
+      scrollSaver.restore()
+    } else {
+      const el = scrollEl.value
+      const oldHeight = el?.scrollHeight ?? 0
+      const oldTop = el?.scrollTop ?? 0
+      visibleCount.value = Math.ceil(needed / PAGE) * PAGE
+      await nextTick()
+      if (el) el.scrollTop = oldTop + el.scrollHeight - oldHeight
+    }
     later(() => { quiet.value = false }, 80)
   }
   const row = stageRef.value?.querySelector<HTMLElement>(`.message-list [data-row="${id}"]`)
@@ -474,7 +519,9 @@ async function send(forced?: string) {
     if (from && target && flightMs && chatId === activeId.value && stageRef.value) {
       const keep = ['message-row', 'mine', 'group-start', 'group-end']
       const rowClass = [...(target.closest('.message-row')?.classList ?? [])].filter(c => keep.includes(c)).join(' ')
-      await flyBubble(target, from, stageRef.value, flightMs, easing.value, rowClass)
+      // tweb sendFlights: the snapshot lands, the real bubble is revealed and the
+      // clone cross-fades away (LAND_FADE) instead of blinking in.
+      await flyBubble(target, from, stageRef.value, flightMs, settings.mech, () => { pending.delete(id) }, rowClass)
     }
   } finally {
     pending.delete(id)
@@ -569,13 +616,19 @@ async function addReaction(m: Message, emoji: string, from?: DOMRect) {
   const icon = chip?.querySelector<HTMLElement>('.reaction-emoji')
   if (!stage || !chip) return
   const d = durationFor('reaction')
-  if (from && d && icon) {
-    icon.style.visibility = 'hidden'
-    await flyEmoji(emoji, from, icon.getBoundingClientRect(), stage, Math.round(d * 0.7), easing.value)
-    icon.style.visibility = ''
+  const pop = () => {
+    if (icon) icon.style.visibility = ''
+    play(chip, [{ transform: 'scale(.55)' }, { transform: 'scale(1.18)', offset: 0.5 }, { transform: 'scale(1)' }], Math.round(d * 0.5), easingFor('reaction'))
+    burst(emoji, chip.getBoundingClientRect(), stage, durationFor('particles'))
   }
-  play(chip, [{ transform: 'scale(.55)' }, { transform: 'scale(1.18)', offset: 0.5 }, { transform: 'scale(1)' }], Math.round(d * 0.5), easing.value)
-  burst(emoji, chip.getBoundingClientRect(), stage, durationFor('particles'))
+  // tweb reactionFlight: analytic parabola, the landing chip becomes visible at
+  // LANDING_UNTIL while the emoji is still in the air. Level 1 keeps only the pop.
+  if (from && d && icon && moveDurationFor('reaction') > 0) {
+    icon.style.visibility = 'hidden'
+    await flyEmoji(emoji, from, icon.getBoundingClientRect(), stage, d, settings.mech, { key: chip, reveal: pop })
+  } else {
+    pop()
+  }
 }
 function toggleReaction(m: Message) {
   if (m.reaction) void addReaction(m, m.reaction)
@@ -591,12 +644,19 @@ function onMsgLeave(el: Element, done: () => void) {
   const node = el as HTMLElement
   const d = durationFor('incoming')
   if (!d || quiet.value) { done(); return }
+  // Level 1 has no displacement and no per-frame layout animation: fade only (tweb spirit).
+  if (moveDurationFor('incoming') <= 0) {
+    const fade = play(node, [{ opacity: 1 }, { opacity: 0 }], Math.round(d * 0.6), 'ease-out', { fill: 'forwards' })
+    if (!fade) { done(); return }
+    void settle(fade).then(done)
+    return
+  }
   node.style.overflow = 'hidden'
   // Every animated property appears in both keyframes (older engines reject partial keyframes).
   const anim = play(node, [
     { height: node.offsetHeight + 'px', marginTop: getComputedStyle(node).marginTop, opacity: 1, transform: 'scale(1)' },
     { height: '0px', marginTop: '0px', opacity: 0, transform: 'scale(.9)' }
-  ], d, easing.value, { fill: 'forwards' })
+  ], d, easingFor('incoming'), { fill: 'forwards' })
   if (!anim) { done(); return }
   void settle(anim).then(done)
 }
@@ -630,7 +690,8 @@ function moveSwipe(e: PointerEvent) {
   if (s.axis === 'pending') {
     if (Math.hypot(dx, dy) < 8) return
     if (pressTimer) clearTimeout(pressTimer)
-    if (dx < 0 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+    // tweb axis lock: |y| > 20px never becomes a reply; first |x| > |y| locks x permanently.
+    if (dx < 0 && Math.abs(dy) <= 20 && Math.abs(dx) > Math.abs(dy)) {
       s.axis = 'x'
       try { s.el.setPointerCapture(e.pointerId) } catch { /* pointer already released */ }
       s.row?.classList.add('swiping')
@@ -642,14 +703,17 @@ function moveSwipe(e: PointerEvent) {
   }
   if (s.axis !== 'x') return
   e.preventDefault()
+  const max = swipeMaxPx()
+  const trigger = swipeTriggerPx()
   const pull = Math.max(0, -dx)
-  const offset = pull < SWIPE_TRIGGER ? pull : SWIPE_TRIGGER + (pull - SWIPE_TRIGGER) * 0.25
-  s.dx = Math.min(offset, 110)
+  // tweb: follow the finger up to MAX, then damp the surplus to 25% of movement.
+  const offset = pull <= max ? pull : max + (pull - max) * 0.25
+  s.dx = Math.min(offset, max + 48)
   s.el.style.transform = `translate3d(${-s.dx}px,0,0)`
-  const progress = Math.min(1, s.dx / SWIPE_TRIGGER)
+  const progress = Math.min(1, s.dx / trigger)
   s.row?.style.setProperty('--swipe', progress.toFixed(3))
-  if (progress >= 1 && !s.armed) { s.armed = true; vibrate() }
-  else if (progress < 1) s.armed = false
+  if (pull >= trigger && !s.armed) { s.armed = true; vibrate() }
+  else if (pull < trigger) s.armed = false
 }
 function endSwipe(e: PointerEvent, m: Message) {
   if (pressTimer) clearTimeout(pressTimer)
@@ -657,12 +721,13 @@ function endSwipe(e: PointerEvent, m: Message) {
   if (!s || s.id !== m.id || s.pointer !== e.pointerId) return
   swipe = null
   const distance = s.dx
+  const trigger = swipeTriggerPx()
   s.el.style.transform = ''
   s.row?.classList.remove('swiping')
   s.row?.style.removeProperty('--swipe')
   if (!distance) return
-  play(s.el, [{ transform: `translate3d(${-distance}px,0,0)` }, { transform: 'translate3d(0,0,0)' }], durationFor('sidebar'), easing.value)
-  if (e.type !== 'pointercancel' && distance >= SWIPE_TRIGGER) startReply(m)
+  play(s.el, [{ transform: `translate3d(${-distance}px,0,0)` }, { transform: 'translate3d(0,0,0)' }], durationFor('sidebar'), easingFor('sidebar'))
+  if (e.type !== 'pointercancel' && distance >= trigger) startReply(m)
 }
 function onDouble(m: Message) {
   window.getSelection()?.removeAllRanges()
@@ -680,13 +745,14 @@ async function demoSwipe() {
   const d = durationFor('sidebar')
   if (bubble && row && d) {
     row.classList.add('swipe-demo')
+    const trigger = swipeTriggerPx()
     const frames: Keyframe[] = [
       { transform: 'translate3d(0,0,0)' },
-      { transform: `translate3d(-${SWIPE_TRIGGER + 10}px,0,0)`, offset: 0.4 },
-      { transform: `translate3d(-${SWIPE_TRIGGER + 10}px,0,0)`, offset: 0.55 },
+      { transform: `translate3d(-${trigger + 10}px,0,0)`, offset: 0.4 },
+      { transform: `translate3d(-${trigger + 10}px,0,0)`, offset: 0.55 },
       { transform: 'translate3d(0,0,0)' }
     ]
-    await settle(play(bubble, frames, Math.round(d * 2.4), easing.value))
+    await settle(play(bubble, frames, Math.round(d * 2.4), easingFor('sidebar')))
     row.classList.remove('swipe-demo')
   }
   startReply(last)
@@ -823,7 +889,7 @@ onBeforeUnmount(() => {
   <div
     ref="stageRef"
     class="app-shell"
-    :class="[`theme-${resolvedTheme}`, { 'motion-off': motionDisabled, 'power-saving': powerSavingActive, 'mobile-chat-open': mobileChatOpen }]"
+    :class="[`theme-${resolvedTheme}`, levelClass, { 'power-saving': powerSavingActive, 'mobile-chat-open': mobileChatOpen }]"
     :style="cssVars"
   >
     <div class="workspace">
@@ -854,11 +920,11 @@ onBeforeUnmount(() => {
                     <button class="menu-item" role="menuitemcheckbox" :aria-checked="resolvedTheme === 'dark'" @click.stop="toggleNight">
                       <Moon :size="20" /> 夜间模式<span class="mini-switch" :class="{ on: resolvedTheme === 'dark' }"></span>
                     </button>
-                    <button class="menu-item" role="menuitemcheckbox" :aria-checked="settings.interfaceAnimations" @click.stop="settings.interfaceAnimations = !settings.interfaceAnimations">
-                      <Sparkles :size="20" /> 动画<span class="mini-switch" :class="{ on: settings.interfaceAnimations }"></span>
+                    <button class="menu-item" role="menuitemcheckbox" :aria-checked="settings.animationLevel > 0" @click.stop="settings.animationLevel = settings.animationLevel > 0 ? 0 : 2">
+                      <Sparkles :size="20" /> 动画<span class="mini-switch" :class="{ on: settings.animationLevel > 0 }"></span>
                     </button>
                     <button v-ripple class="menu-item" role="menuitem" @click="showAbout = true"><Info :size="20" /> 关于</button>
-                    <div class="menu-footer">Motion Lab 2.0 · 非官方实现</div>
+                    <div class="menu-footer">Motion Lab 3.0 · 非官方实现</div>
                   </div>
                 </Transition>
               </div>

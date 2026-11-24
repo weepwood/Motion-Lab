@@ -1,0 +1,62 @@
+/*
+ * motion-kit — design tokens & animation levels
+ * --------------------------------------------------------------------
+ * One CSS source of truth shared by transitions AND by JS effects (ripple
+ * reads --mk-ripple-duration back at runtime, flights use curbs via JS).
+ *
+ * The key trick for reduced motion ("level 1"): displacement and fade use
+ * SEPARATE duration tokens. Level 1 only zeroes the -move token, so motions
+ * snap instantly while cross-fades keep running — reduced ≠ removed.
+ */
+
+:root {
+  /* global */
+  --mk-ease: cubic-bezier(0.4, 0, 0.2, 1);   /* tweb standard UI curve  */
+  --mk-ease-exit: cubic-bezier(0.23, 1, 0.32, 1);
+  --mk-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* per-effect durations: fade / colour on top, displacement below */
+  --mk-dur: 300ms;      --mk-dur-move: 300ms;
+  --mk-dur-menu: 200ms; --mk-dur-menu-move: 200ms;
+  --mk-dur-push: 200ms; --mk-dur-push-move: 200ms;
+
+  /* ripple */
+  --mk-ripple-duration: 700ms;
+  --mk-ripple-easing: cubic-bezier(0.4, 0, 0.2, 1);
+  --mk-ripple-color: rgba(128, 128, 128, 0.14);
+}
+
+/* Animation levels — tweb liteMode semantics. Set on <html>:
+ *   <html data-motion-level="2">   full (default)
+ *   <html data-motion-level="1">   reduced: displacement snaps, fades stay
+ *   <html data-motion-level="0">   off: everything instant
+ */
+[data-motion-level='1'] {
+  --mk-dur-move: 0ms;
+  --mk-dur-menu-move: 0ms;
+  --mk-dur-push-move: 0ms;
+}
+[data-motion-level='0'] {
+  --mk-dur: 0ms;      --mk-dur-move: 0ms;
+  --mk-dur-menu: 0ms; --mk-dur-menu-move: 0ms;
+  --mk-dur-push: 0ms; --mk-dur-push-move: 0ms;
+  --mk-ripple-duration: 0ms;
+}
+
+/* System "reduce motion" forces level 0 unless the page overrides it. */
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion-keep]) {
+    --mk-dur: 0ms;      --mk-dur-move: 0ms;
+    --mk-dur-menu: 0ms; --mk-dur-menu-move: 0ms;
+    --mk-dur-push: 0ms; --mk-dur-push-move: 0ms;
+    --mk-ripple-duration: 0ms;
+  }
+}
+
+/* View Transitions: forks must never cross-fade on their own —
+   any snapshot reveal is driven explicitly via revealFrom(). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}

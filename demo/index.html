@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-motion-level="2">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>motion-kit · 零依赖动效包演示</title>
+<link rel="stylesheet" href="../packages/motion/tokens.css" />
+<style>
+  * { box-sizing: border-box }
+  body {
+    margin: 0; min-height: 100vh; padding: 28px 20px 80px;
+    font-family: Roboto, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f2f3f5; color: #1c1e21; transition: background .2s, color .2s;
+  }
+  html[data-scheme="dark"] body { background: #191919; color: #eee }
+  header { max-width: 1060px; margin: 0 auto 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap }
+  header h1 { margin: 0; font-size: 22px }
+  header code { color: #707579; font-size: 13px }
+  .note { max-width: 1060px; margin: 0 auto 18px; color: #707579; font-size: 13px; line-height: 1.6 }
+  html[data-scheme="dark"] .note { color: #999 }
+
+  /* ---------- 控制条（驱动包的 token 系统） ---------- */
+  .controls {
+    max-width: 1060px; margin: 0 auto 24px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+    padding: 12px 16px; border-radius: 14px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  html[data-scheme="dark"] .controls { background: #212121 }
+  .controls label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #707579 }
+  .seg { display: flex; padding: 3px; border-radius: 10px; background: #eaeaec }
+  html[data-scheme="dark"] .seg { background: #2c2c2e }
+  .seg button { border: 0; background: none; padding: 6px 14px; border-radius: 8px; font: 500 13px inherit; color: #707579; cursor: pointer }
+  .seg button[aria-pressed="true"] { background: #fff; color: #1c1e21; box-shadow: 0 1px 2px rgba(0,0,0,.12) }
+  html[data-scheme="dark"] .seg button[aria-pressed="true"] { background: #3a3a3c; color: #fff }
+  input[type="range"] { accent-color: #3390ec }
+
+  /* ---------- 卡片网格 ---------- */
+  .grid { max-width: 1060px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px }
+  .card { padding: 18px; border-radius: 16px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow: hidden }
+  html[data-scheme="dark"] .card { background: #212121 }
+  .card h2 { margin: 0 0 4px; font-size: 15px }
+  .card p { margin: 0 0 14px; font-size: 12.5px; color: #707579; line-height: 1.5 }
+  html[data-scheme="dark"] .card p { color: #9a9a9a }
+  .card code { font: 11px/1.4 ui-monospace, Menlo, monospace; color: #3390ec; word-break: break-all }
+  .demo-btn { border: 0; padding: 10px 16px; border-radius: 10px; background: #3390ec; color: #fff; font: 500 13px inherit; cursor: pointer }
+
+  /* 飞行 */
+  .fly-stage { position: relative; height: 130px; border-radius: 12px; background: #f0f2f4; margin-bottom: 12px }
+  html[data-scheme="dark"] .fly-stage { background: #181818 }
+  .fly-source { position: absolute; left: 14px; bottom: 12px; padding: 8px 14px; border-radius: 16px; background: #8774e1; color: #fff; font-size: 13px }
+  .fly-target { position: absolute; right: 14px; top: 12px; min-width: 64px; height: 44px; border-radius: 10px; border: 2px dashed #c3c7cb; display: grid; place-items: center; font-size: 20px }
+  .fly-target.on { border-style: solid; border-color: #4fae4e; background: rgba(79,174,78,.12) }
+  .mk-flight > * { width: 100% !important; height: 100% }
+
+  /* 抛物线 */
+  .para-stage { position: relative; height: 110px; border-radius: 12px; background: #f0f2f4; margin-bottom: 12px }
+  html[data-scheme="dark"] .para-stage { background: #181818 }
+  .para-palette { position: absolute; inset: auto 0 10px 10px; display: flex; gap: 6px }
+  .para-palette button { border: 0; background: none; font-size: 22px; cursor: pointer; padding: 4px }
+  .para-target { position: absolute; right: 14px; top: 10px; width: 48px; height: 48px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.15); display: grid; place-items: center; font-size: 22px; opacity: .35 }
+  .para-target.on { opacity: 1; background: #fdf0d5; transform: scale(1.12) }
+
+  /* 涟漪 */
+  .ripple-row { display: flex; gap: 12px; margin-bottom: 10px }
+  .ripple-pill { flex: 1; height: 46px; border: 0; border-radius: 23px; background: #3390ec; color: #fff; font: 500 14px inherit; cursor: pointer }
+  .ripple-rect { flex: 1; height: 46px; border: 0; border-radius: 10px; background: #e4e6e8; color: #1c1e21; font: 500 13px inherit; cursor: pointer }
+  html[data-scheme="dark"] .ripple-rect { background: #2f2f31; color: #eee }
+
+  /* 滑动 */
+  .swipe-card {
+    position: relative; touch-action: pan-y; user-select: none; cursor: grab;
+    padding: 14px 16px; margin-bottom: 8px; border-radius: 12px; background: #eef6ea; will-change: transform;
+  }
+  html[data-scheme="dark"] .swipe-card { background: #2d3a2c }
+  .swipe-hint { font-size: 12px; color: #707579 }
+  .swipe-icon { position: absolute; right: 12px; top: 50%; margin-top: -15px; width: 30px; height: 30px; border-radius: 50%; background: #3390ec; color: #fff; display: grid; place-items: center; font-size: 14px; opacity: var(--swipe, 0); transform: scale(calc(.4 + var(--swipe, 0) * .6)); pointer-events: none }
+  .toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); background: rgba(0,0,0,.8); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 99 }
+  .toast.on { opacity: 1 }
+
+  /* 圆形揭示 & 等级 */
+  .reveal-swatch, .level-swatch { border-radius: 12px; height: 64px; display: grid; place-items: center; font-size: 13px; margin-bottom: 10px; background: #f0f2f4; color: #707579 }
+  html[data-scheme="dark"] .reveal-swatch { background: #2c2c2e; color: #9a9a9a }
+
+  /* 列推挤 */
+  .push-stage { position: relative; height: 170px; border-radius: 12px; overflow: hidden; background: #f0f2f4; margin-bottom: 12px }
+  .push-panel { position: absolute; inset: 0; border-radius: 12px; display: grid; place-items: center; gap: 6px; font-size: 14px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    transition: transform var(--mk-dur-push-move) var(--mk-ease), filter var(--mk-dur-push-move) var(--mk-ease), opacity var(--mk-dur-push) ease }
+  html[data-scheme="dark"] .push-panel { background: #262628 }
+  .push-a { background: linear-gradient(140deg, #eaf3ff, #dbeaff) }
+  html[data-scheme="dark"] .push-a { background: linear-gradient(140deg, #232c3d, #1f2735) }
+  .push-b { background: linear-gradient(140deg, #fdf3e4, #fbe9cf) }
+  html[data-scheme="dark"] .push-b { background: linear-gradient(140deg, #3a3227, #332b21) }
+  .push-stage[data-view="b"] .push-a { transform: translateX(-15%); filter: brightness(var(--push-dim, .84)); pointer-events: none }
+  .push-stage[data-view="a"] .push-b { transform: translateX(100%); pointer-events: none }
+  .push-stage a, .push-panel button { align-self: center }
+
+  /* 滚动锚点 */
+  .scroll-demo { height: 190px; overflow: auto; border-radius: 12px; background: #f0f2f4; padding: 6px }
+  .scroll-demo .mk-anchor-row { padding: 8px 12px; margin: 4px 0; border-radius: 8px; background: #fff; font-size: 12.5px; color: #707579; font-variant-numeric: tabular-nums }
+  .scroll-demo .mk-anchor-row.new { background: #eaf3ff; color: #3390ec }
+  html[data-scheme="dark"] .scroll-demo .mk-anchor-row { background: #282828; color: #999 }
+  html[data-scheme="dark"] .scroll-demo .mk-anchor-row.new { background: #1f2d3f; color: #7ab7f5 }
+
+  /* 曲线赛跑 */
+  .race { display: grid; gap: 8px; margin-bottom: 12px }
+  .race-lane { position: relative; height: 24px; border-radius: 12px; background: #eef0f2 }
+  html[data-scheme="dark"] .race-lane { background: #2c2c2e }
+  .race-ball { position: absolute; top: 3px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #3390ec }
+  .race-tag { position: absolute; right: 8px; top: 3px; font: 10.5px/18px ui-monospace, Menlo, monospace; color: #707579 }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>motion-kit</h1>
+  <code>packages/motion · 零依赖 · 纯 ESM + DOM 标准 · 本页零构建直接 import</code>
+</header>
+<p class="note">
+  下面每一块都在调用 <code>packages/motion</code> 的真实导出。顶部控制条修改的是包提供的 CSS token 和等级状态——
+  所有 JS 效果和 CSS 过渡共享同一份配置，这是这套包的核心哲学（Token 单源）。
+</p>
+
+<div class="controls">
+  <label>动画等级
+    <span class="seg" id="levelSeg">
+      <button data-lv="0" aria-pressed="false">0 关闭</button>
+      <button data-lv="1" aria-pressed="false">1 降级</button>
+      <button data-lv="2" aria-pressed="true">2 完整</button>
+    </span>
+  </label>
+  <label>基础时长 <input id="durRange" type="range" min="100" max="800" step="20" value="300" /> <span id="durLabel">300ms</span></label>
+  <label>曲线
+    <select id="easeSel">
+      <option value="standard">standard (tweb 标准)</option>
+      <option value="exit">exit (快出缓停)</option>
+      <option value="overshoot">overshoot (回弹)</option>
+    </select>
+  </label>
+  <label style="margin-left:auto"><button class="demo-btn" id="revealBtn" style="padding:8px 14px">圆形揭示切换深浅</button></label>
+</div>
+
+<div class="grid">
+
+  <section class="card">
+    <h2>双曲线弧线飞行 · flyClone()</h2>
+    <p>X/Y 两条曲线分开驱动 → 弧线；落位交叉淡出。连点两次：同 key 新飞行自动打断旧的（keyed 实例）。等级 1 时不飞只落位。</p>
+    <div class="fly-stage">
+      <span class="fly-source" id="flySource">消息气泡</span>
+      <span class="fly-target" id="flyTarget">💬</span>
+    </div>
+    <button class="demo-btn" id="flyBtn">发送（快照飞行）</button>
+  </section>
+
+  <section class="card">
+    <h2>解析抛物线飞行 · flyParabola()</h2>
+    <p>y = y₀ + bt + at²，中程抬升 30px。飞行到 75% 时落点已经在收货（LANDING_UNTIL）。</p>
+    <div class="para-stage">
+      <span class="para-target" id="paraTarget">🎯</span>
+      <div class="para-palette" id="paraPalette"></div>
+    </div>
+    <p class="swipe-hint">点一个表情 →</p>
+  </section>
+
+  <section class="card">
+    <h2>最远角涟漪 · attachRipple()</h2>
+    <p>半径 = 按下点到最远角的距离；时长在运行时从 <code>--mk-ripple-duration</code> 读回（JS/CSS 单源）。等级 1 自动降级为快速淡入：</p>
+    <div class="ripple-row">
+      <button class="ripple-pill" id="ripPill">药丸按钮 · 连点试试</button>
+      <button class="ripple-rect" id="ripRect">方形按钮</button>
+    </div>
+    <p class="swipe-hint">把顶部「基础时长」改小，涟漪跟着变。</p>
+  </section>
+
+  <section class="card">
+    <h2>锁轴阻尼滑动 · attachSwipe()</h2>
+    <p>垂直移动 &gt;20px 即让位滚动；64px 封顶后按 25% 衰减跟手；拖过 48px 触发。</p>
+    <div class="swipe-card" id="swipeCard">
+      <strong>← 向左拖我（就像 Telegram 的滑动回复）</strong>
+      <div class="swipe-hint">越接近阈值，图标显影越满；松手自动弹回</div>
+      <span class="swipe-icon">↩︎</span>
+    </div>
+    <p class="swipe-hint" id="swipeState">未触发</p>
+  </section>
+
+  <section class="card">
+    <h2>列推挤 + 视差暗化（纯 token）</h2>
+    <p>tweb slideNavigation：新页整宽推入，旧页视差 15% + 压暗到 84%。等级 1 时位移瞬跳但淡入照常：</p>
+    <div class="push-stage" id="pushStage" data-view="a">
+      <div class="push-panel push-a"><div><strong>列表页</strong><br /><span style="font-size:12px;color:#707579">旧页被推走时会被压暗</span></div></div>
+      <div class="push-panel push-b"><div><strong>详情页</strong><br /><button class="demo-btn" id="pushBack" style="margin-top:8px;padding:6px 14px">返回</button></div></div>
+    </div>
+    <button class="demo-btn" id="pushBtn">推入</button>
+  </section>
+
+  <section class="card">
+    <h2>滚动锚点补偿 · createScrollSaver()</h2>
+    <p>先在可视区顶部找一行钉住，DOM 变化后补偿 scrollTop。勾掉试试「跳」有多明显：</p>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <label style="font-size:12.5px;color:#707579"><input type="checkbox" id="anchorOn" checked /> 启用锚点补偿</label>
+      <button class="demo-btn" id="prependBtn" style="padding:8px 12px">向前插入 20 行</button>
+    </div>
+    <div class="scroll-demo" id="scrollDemo"></div>
+  </section>
+
+  <section class="card">
+    <h2>曲线赛跑 · play() + CURVES</h2>
+    <p>同一时长下的三种曲线同屏对比（时长跟随「基础时长」）：</p>
+    <div class="race" id="race">
+      <div class="race-lane"><span class="race-ball"></span><span class="race-tag">standard</span></div>
+      <div class="race-lane"><span class="race-ball"></span><span class="race-tag">exit</span></div>
+      <div class="race-lane"><span class="race-ball"></span><span class="race-tag">overshoot</span></div>
+    </div>
+    <button class="demo-btn" id="raceBtn">开始赛跑</button>
+  </section>
+
+  <section class="card">
+    <h2>等级语义演示</h2>
+    <p>等级 1 的意义：位移瞬跳，淡入淡出照常——「减弱」不等于「关闭」。切顶部等级再点按钮：</p>
+    <div class="reveal-swatch" id="fadeBox" style="opacity:0">淡入 + 上浮</div>
+    <button class="demo-btn" id="fadeBtn">入场</button>
+  </section>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  import {
+    CURVES, bezierCss, play, settle, flyClone, flyParabola,
+    attachRipple, attachSwipe, createScrollSaver, revealFrom, fastRaf, doubleRaf
+  } from '../packages/motion/index.js'
+
+  const root = document.documentElement
+  const toastEl = document.getElementById('toast')
+  function toast(text) {
+    toastEl.textContent = text
+    toastEl.classList.add('on')
+    clearTimeout(toast._t)
+    toast._t = setTimeout(() => toastEl.classList.remove('on'), 1800)
+  }
+
+  /* ---------- 控制条 → token 单源 ---------- */
+  const durRange = document.getElementById('durRange')
+  const durLabel = document.getElementById('durLabel')
+  const easeSel = document.getElementById('easeSel')
+  function syncTokens() {
+    const ms = durRange.value + 'ms'
+    const ease = bezierCss(CURVES[easeSel.value])
+    root.style.setProperty('--mk-dur', ms)
+    root.style.setProperty('--mk-dur-move', document.documentElement.dataset.motionLevel === '1' ? '0ms' : ms)
+    root.style.setProperty('--mk-ease', ease)
+    durLabel.textContent = durRange.value + 'ms'
+  }
+  const levelSeg = document.getElementById('levelSeg')
+  levelSeg.addEventListener('click', e => {
+    const btn = e.target.closest('button')
+    if (!btn) return
+    root.dataset.motionLevel = btn.dataset.lv
+    for (const b of levelSeg.children) b.setAttribute('aria-pressed', String(b === btn))
+    syncTokens()
+  })
+  durRange.addEventListener('input', syncTokens)
+  easeSel.addEventListener('change', syncTokens)
+  const level = () => Number(root.dataset.motionLevel || '2')
+  const isReduced = () => level() < 2
+  const duration = () => Number(durRange.value)
+
+  /* ---------- 双曲线飞行 ---------- */
+  const flySource = document.getElementById('flySource')
+  const flyTarget = document.getElementById('flyTarget')
+  let flyCount = 0
+  document.getElementById('flyBtn').addEventListener('click', async () => {
+    flyCount++
+    flyTarget.classList.remove('on')
+    flyTarget.textContent = '…'
+    if (isReduced()) {
+      toast('等级' + level() + '：位移被停用，直接落位')
+      flyTarget.classList.add('on')
+      flyTarget.textContent = '✓'
+      return
+    }
+    await flyClone({
+      source: flySource, target: flyTarget, container: document.body,
+      duration: duration(),                                        // 曲线固定用 tweb 实测飞行曲线
+      reveal: () => { flyTarget.classList.add('on'); flyTarget.textContent = '✓' }
+    })
+  })
+
+  /* ---------- 抛物线 ---------- */
+  const paraTarget = document.getElementById('paraTarget')
+  const paraPalette = document.getElementById('paraPalette')
+  for (const emoji of ['🔥', '❤️', '🎉', '👀']) {
+    const b = document.createElement('button')
+    b.textContent = emoji
+    b.addEventListener('click', async () => {
+      paraTarget.classList.remove('on')
+      if (isReduced()) { paraTarget.classList.add('on'); return }
+      await flyParabola({
+        source: b, target: paraTarget, container: document.body,
+        duration: Math.max(220, duration()),
+        reveal: () => paraTarget.classList.add('on')
+      })
+    })
+    paraPalette.append(b)
+  }
+
+  /* ---------- 涟漪 ---------- */
+  attachRipple(document.getElementById('ripPill'))
+  attachRipple(document.getElementById('ripRect'), { color: 'rgba(51,144,236,.18)' })
+
+  /* ---------- 滑动回复 ---------- */
+  const swipeCard = document.getElementById('swipeCard')
+  const swipeState = document.getElementById('swipeState')
+  attachSwipe(swipeCard, {
+    max: 64, trigger: 0.75,
+    onMove: ({ progress }) => swipeCard.style.setProperty('--swipe', progress.toFixed(3)),
+    onEnd: ({ triggered, distance }) => {
+      swipeCard.style.setProperty('--swipe', '0')
+      swipeState.textContent = triggered ? `已触发（位移 ${Math.round(distance)}px ≥ 48px 阈值）` : `未触发（位移 ${Math.round(distance)}px，阈值 64×0.75=48px）`
+      if (triggered) toast('滑动回复已就绪 ↩︎')
+    }
+  })
+
+  /* ---------- 圆形揭示 ---------- */
+  document.getElementById('revealBtn').addEventListener('click', e => {
+    void revealFrom({
+      x: e.clientX, y: e.clientY,
+      duration: 600,
+      apply: () => { root.dataset.scheme = root.dataset.scheme === 'dark' ? '' : 'dark' }
+    })
+  })
+
+  /* ---------- 列推挤（纯 CSS token 驱动） ---------- */
+  const pushStage = document.getElementById('pushStage')
+  document.getElementById('pushBtn').addEventListener('click', () => { pushStage.dataset.view = 'b' })
+  document.getElementById('pushBack').addEventListener('click', () => { pushStage.dataset.view = 'a' })
+
+  /* ---------- 滚动锚点 ---------- */
+  const scrollDemo = document.getElementById('scrollDemo')
+  const anchorOn = document.getElementById('anchorOn')
+  const saver = createScrollSaver(() => scrollDemo, '.mk-anchor-row')
+  let rowSeq = 0
+  for (let i = 0; i < 14; i++) addRow(false)
+  function addRow(fresh) {
+    const row = document.createElement('div')
+    row.className = 'mk-anchor-row' + (fresh ? ' new' : '')
+    row.dataset.anchor = 'row-' + (rowSeq++)
+    row.textContent = (fresh ? '★ 新插入 · ' : '') + '锚点行 #' + rowSeq + ' · 滚动到中间再插入试试'
+    scrollDemo.prepend(row)
+  }
+  document.getElementById('prependBtn').addEventListener('click', () => {
+    if (anchorOn.checked) saver.save()
+    for (let i = 0; i < 20; i++) addRow(true)
+    if (anchorOn.checked) saver.restore()
+  })
+
+  /* ---------- 曲线赛跑 ---------- */
+  const balls = [...document.querySelectorAll('#race .race-ball')]
+  document.getElementById('raceBtn').addEventListener('click', () => {
+    balls.forEach((ball, i) => {
+      ball.style.transform = ''
+      void ball.offsetWidth
+      const anim = play(ball, [
+        { transform: 'translateX(0)' },
+        { transform: 'translateX(calc(100% - 26px))' }
+      ], duration(), bezierCss(CURVES[['standard', 'exit', 'overshoot'][i]]))
+      void settle(anim)
+    })
+  })
+
+  /* ---------- 等级语义（淡入 + 位移分离） ---------- */
+  const fadeBox = document.getElementById('fadeBox')
+  document.getElementById('fadeBtn').addEventListener('click', async () => {
+    const atLevel1 = level() === 1
+    fadeBox.style.transition = 'none'
+    fadeBox.style.opacity = '0'
+    fadeBox.style.transform = 'translateY(14px)'
+    void fadeBox.offsetWidth
+    // fade 用总时长，位移用 -move token：等级 1 时它已经是 0ms → 瞬跳
+    fadeBox.style.transition = `opacity var(--mk-dur) ease, transform var(--mk-dur-move) var(--mk-ease)`
+    await doubleRaf()
+    fadeBox.style.opacity = '1'
+    fadeBox.style.transform = 'translateY(0)'
+    toast(atLevel1 ? '等级 1：上浮瞬跳，淡入保留' : '等级 2：淡入 + 上浮都在')
+  })
+
+  /* 帧合批示例：一眼验证 fastRaf 合帧 */
+  window.addEventListener('load', () => { fastRaf(() => console.log('[motion-kit] ready · fastRaf ok')) })
+</script>
+</body>
+</html>

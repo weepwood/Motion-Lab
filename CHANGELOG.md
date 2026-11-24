@@ -1,3 +1,130 @@
+# 3.3.0 AI 复刻导出：把实时配置编译成给 AI 的复刻提示词
+
+## 一、动机
+
+调好的参数只留在本项目里没有意义——研究的终点是**在任何项目里复现这种手感**。最可靠的复现途径是通过 AI：给它一份数值精确、结构完整、含验收标准的提示词，让它在 React / Vue / Svelte / 原生项目里照抄实现。
+
+## 二、功能（新增设置页「AI 复刻导出」）
+
+- **12 个效果**单选导出或**全套导出**：发送飞行、表情回应、涟漪、滑动回复、主题揭示、列推挤、聊天切换、进场上浮、菜单展开、删除滑动、动画等级系统、滚动锚点补偿。
+- **目标框架**（React 函数组件 / Vue 3 组合式 / Svelte / 原生 JS）与**实现偏好**（Web Animations API + CSS 变量，零依赖推荐 / 纯 CSS / 第三方 motion 库）实时切换，提示词生成对应的框架特定要求（如 Vue 的 `<Transition enter-active-class>` 用法、WAAPI 的 `element.animate()` 调用形式）。
+- 提示词结构：角色设定 → 效果概述 → 精确参数表（**所有数值来自三层配置的实时值**：曲线控制点、时长、位移、阈值原样照抄，并注明「不要自行改动」）→ 实现步骤 → 数学与几何公式（贝塞尔、抛物线解析解、圆形揭示半径、最远角半径）→ 工程约束（只动 transform/opacity、可中断与节点清理、尊重系统偏好）→ 验收标准 → 机器可读 JSON 附录。
+- 全套导出附「动效系统总览」：动画等级三层模型、全局时长/曲线系统，构成一份完整的动效系统设计文档。
+- 调整任何设置（机制参数、全局时长、动画等级、省电模式、系统「减少动态效果」、机制开关）提示词都会重算；复制 / 下载 `.md` 一键带走。
+
+## 三、实现
+
+- 新增 `src/aiExport.ts`（492 行）：效果注册表（`exportableEffects`）+ 每个效果的参数提取器（从 `settings` 三层配置读值）+ 提示词装配器；`SettingsPanel.vue` 新增 `export` tab，设置主页新增入口。
+- 提示词是一份 Vue `computed`：生成时读到的每个配置量（含 `durationFor()` 依赖的省电模式、系统减动效、电池状态）都被自动追踪，任何变动都会重算，不需要手工维护依赖清单。
+- e2e 新增 2 例：断言发送飞行的双曲线数值、`"effect": "send"` JSON、Vue 框架特定要求、改基础时长后提示词实时跟随、全套 ≥12 个任务与总览；以及开着省电 → heavy 类别数值归 0 且改口去讲 120ms 闪白、关掉省电 → 复原、关掉锚点补偿 → 提示词写明交给浏览器原生 scroll anchoring。
+
+# 3.2.0 单一源码合并 + CI 防护网 + 针对实测的性能优化
+
+基于实测的优化落地（原则：优化项全部来自测量或已发生的事故，不拍脑袋）。
+
+## 一、P0 · 消除双源码（应用 ⇄ motion-kit）
+
+- v3.1 遗留的重复实现全部收拢：`src/engine.ts`、`src/scrollSaver.ts` **删除**，`src/motion.ts` 改为**适配层**（保留 UI 缓动预设 + 把设置/机制参数桥接到包），`src/ripple.ts` 变为 `attachRipple` 的指令薄包装（时长/曲线经 `--mk-ripple-*` token 桥实时生效，涟漪颜色迁移到 `--mk-ripple-color`）。
+- 包 v1.0.1 为此新增能力：`flyClone`/`flyParabola` 支持 `from`（矩形或元素，飞行终点也接受纯矩形）、`className`；`burstParticles`（className 可配）；`createScrollSaver` 支持自定义行属性；涟漪追加 tweb 的「滑动即撤」（触屏移动 >8px 立即放弃）。
+- 效果：动效实现现在**只有一份**（`packages/motion`），应用和 demo 都是它的调用方。
+
+## 二、P0 · 交付防护网（三道闸门进 CI）
+
+1. **包导入烟雾**（`npm run check:pkg`，scripts/check-package.mjs）：逐模块 import——v1.0.0 曾把 `??`/`||` 混用的语法错误发布出去，此闸门专为它而立。
+2. **demo 冒烟测试**（`tests/demo.spec.ts`，7 例）：飞行打断无残留、抛物线落点、涟漪 token 实时性、滑动手势、等级 token、滚动锚点，全部 console-clean。
+3. **主应用 console 零报错断言**加入 e2e；`index.d.ts` 的漂移由主 typecheck 把关（应用直接 import 包的 .d.ts）。
+- CI（ci.yml）顺序改为：install → check:pkg → build → playwright（motion+demo 全通过才绿）。
+
+## 三、P0 · demo 可部署
+
+`npm run build` 末尾执行 `scripts/deploy-demo.mjs`：demo 与包随构建进 `dist/`，GitHub Pages 部署后可直接访问 `<site>/demo/`。
+
+## 四、P1 · 三处性能点（针对性能探针实测）
+
+1. **重动画互斥**（tweb `dispatchHeavyAnimationEvent` 引用计数）：包新增 `holdHeavyAnimations(promise, timeout=2000)`（`html.mk-heavy-held`），`flyClone/flyParabola/burstParticles` 自动持有；主题揭示（View Transitions）同样接入——飞行/揭示期间壁纸 blob 过渡让位，不再抢同一批帧（实测 VT 场景曾是最重：4 帧 >34ms）。
+2. **引用高亮瘦身**：`.highlight::before` 从 `inset: -2px -100vw`（一个 200vw 宽的绘制层）改为行内宽度 + 圆角。
+3. **设置面板异步分包**：`SettingsPanel` 改 `defineAsyncComponent`，不进首屏关键路径。叠加去重成果：主包 gzip **63.6 kB → 54.6 kB（-14%）**，含一个新的 35 kB（gzip 12.6 kB）懒加载设置分块。
+
+## 五、验证
+
+- typecheck、`npm run build`（demo 入 dist 实测 200）、包 8 模块 import 烟雾全过。
+- Playwright **23/23**（应用 16 + demo 7）。
+
+---
+
+# 3.1.0 motion-kit：零依赖可复用动效包 + 静态演示页
+
+把本项目的研究成果提取成任何项目都能直接拷走的包，并配了一个零构建的单页演示。
+
+## 一、`packages/motion/`（motion-kit v1.0.0）
+
+8 个纯 ESM 模块 + token 样式表 + TS 类型声明，无任何运行时依赖、不需要构建工具：
+
+- `engine.js`：fastRaf 帧合批、doubleRaf、keyed 动画实例（`claimAnimation(key)` 同 key 新动画自动打断旧动画）
+- `easing.js`：贝塞尔求值/生成、阻尼弹簧 → `linear()`、tweb 实测曲线预设（`CURVES.standard/exit/flightX/flightY/overshoot`）、永不怕坏曲线的 `play()/settle()`、通用 `drag()`
+- `flight.js`：`flyClone()` 双曲线快照飞行（X/Y 分离曲线 → 弧线 + 落位交叉淡出）、`flyParabola()` 解析抛物线飞行（抬升/落点可调）
+- `ripple.js`：`attachRipple()` 最远角涟漪，时长在运行时从 `--mk-ripple-duration` 读回（JS/CSS 单源），等级 ≤1 自动降级快速淡入
+- `gestures.js`：`attachSwipe()` tweb 滑动数学（20px 锁轴弃权、64px 阻尼封顶、阈值 = 封顶×比例、图标按进度显影）
+- `scroll-saver.js`：`createScrollSaver()` 列表变化时的滚动锚点补偿
+- `reveal.js`：`revealFrom()` View Transitions 圆形状态揭示（无 API 时自动直落）
+- `tokens.css`：设计 token + 动画等级 0/1/2（位移 `-move` token 分离：等级 1 只归零位移、淡入照常）+ `prefers-reduced-motion` 回退链
+
+各框架接入方式（Vue 指令 / React hook / Svelte action）见 `packages/motion/README.md`。
+
+## 二、`demo/index.html`
+
+零构建单页：飞双曲线（连点演示自动打断）、抛物线表情、涟漪、滑动回复手势、圆形揭示换肤、列推挤视差+暗化、滚动锚点（可开关对比）、曲线赛跑、等级 0/1/2 语义演示；顶部控制条实时改 token 验证「单源」哲学。访问 `http://localhost:5173/demo/`。
+
+## 三、修复
+
+- 包初版两处 `??` 与 `||` 混用导致的 ESM 语法错误（ripple/gestures），已用 `node --check` 全量校验。
+
+---
+
+# 3.0.0 三层配置体系 & tweb 机制对齐
+
+本研究基于对 tweb（morethanwords/tweb）源码的逐文件精读，提炼出四个引擎层的机制，全部在本项目重新实现并做成可调配置。
+
+## 一、配置模型升级为三层
+
+| 层 | 内容 | 对应 tweb 机制 |
+| --- | --- | --- |
+| 层 1 | 动画等级：关闭(0) / 降级(1) / 完整(2) | liteMode body.animation-level-N |
+| 层 2 | 逐类时长/曲线覆盖（10 类） | SCSS 过渡 token（--btn-menu-transition 等） |
+| 层 3 | 机制参数：飞行曲线、阻尼、阈值、视差、亮度… | sendFlights / reactionFlight / bubbles / base.scss |
+
+- 等级 1 的实现方式与 tweb 的「属性白名单」同效但更简单：时长 token 拆成 `--dur-*`（淡入/颜色）与 `--dur-*-move`（位移），等级 1 只把后者置 0 → 位移瞬跳、淡入照常；纯位移类别（发送飞行、粒子、壁纸、主题扩散）在等级 1 直接停用。
+- 系统减动效强制 0 级，省电模式强制 ≤1 级；每类停用都会在 UI 注明原因。
+- 设置存储升级为 `motion-lab-settings-v3`，v2 自动迁移（界面动画开关 → 等级），旧的 `motion-lab-theme` 仍兼容。
+
+## 二、按 tweb 实测值重写的交互机制
+
+- **发送飞行**（tweb `sendFlights.ts`）：X / Y 分离曲线 —— CURVE_X `(.23,1,.32,1)` 快出 + CURVE_Y `(.1992,.0106,.2792,.9103)` 缓升，同 300ms 内走出弧线；落位后真气泡显影、克隆交叉淡出（LAND_FADE 100ms）。两条曲线都可以在实验室里拖动控制点。
+- **表情回应飞行**（tweb `reactionFlight.ts`）：解析抛物线 `y=y₀+bt+at²`（16 站关键帧），中点抬升 30px 可调；飞行至 75%（LANDING_UNTIL）时落点显影并弹跳。
+- **滑动回复**（tweb `bubbles.ts`）：垂直位移 >20px 即弃权；64px 阻尼封顶后按 25% 衰减跟手；触发阈值 = 64×0.75=48px（两个值都可调）；图标按进度显影。
+- **列推挤转场**（tweb `slideNavigation`）：旧页移出时视差 25% + 亮度压暗到 80%（两个值都可调），新页整宽推入。
+- **主题扩散**：沿用 View Transitions 圆形揭示，改用类别曲线；进夜 600ms / 出夜 ×0.83（对应 tweb 的 600/500）。
+- **菜单 / 弹窗 / 涟漪 / 移动端推入**：时长曲线全部接入类别覆盖；菜单出厂值按 tweb 校准（.2s 标准曲线）。
+
+## 三、新基础设施
+
+- `src/engine.ts`：fastRaf 帧合批（全部 JS 侧动画共享一个 rAF）+ keyed 动画实例（同 key 新动画自动打断旧动画，飞行克隆的清理不再依赖散落的手工 cancel）。
+- `src/scrollSaver.ts`：滚动锚点补偿（tweb `scrollSaver` 思路），“查看更早”与引用跳转加载时把视口钉在可见消息上。
+- `src/presets.ts`：「Motion Lab」与「Telegram 官方手感」预设 + 配置 JSON 导入导出（含全部机制参数）。
+
+## 四、设置 UI
+
+- 「动画与省电」新增：动画等级三档（含生效说明）、逐类覆盖编辑器（chips 选类别 + 时长/曲线覆盖 + 演示）、手感预设、配置文件导入导出。
+- 「动效实验室」新增机制参数面板：发送飞行双曲线编辑器、落位淡出、抛物线抬升/落点、滑动阻尼/阈值、涟漪 scale、推挤视差/亮度、滚动锚点开关，全部带滑杆与实时联动。
+- 主菜单「动画」开关改为等级 0/2 切换。
+
+## 五、测试与文档
+
+- `tests/motion.spec.ts` 从 12 例扩到 15 例：新增等级 1 降级（位移 token 归零而淡入保留）、Telegram 预设持久化、逐类覆盖驱动 CSS 变量并持久化；原「界面动画开关」用例迁移为等级开关。
+- README 重写配置说明与设计原则；本文件记录 3.0.0 全部变更。
+
+---
+
 # 2.0.0 优化说明
 
 ## 一、修复的设置问题
