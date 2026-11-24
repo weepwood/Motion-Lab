@@ -19,6 +19,8 @@ import {
 } from './settings'
 // Async so the settings UI stays out of the critical first paint (P1 perf).
 const SettingsPanel = defineAsyncComponent(() => import('./components/SettingsPanel.vue'))
+const SettingsExport = defineAsyncComponent(() => import('./components/SettingsExport.vue'))
+import type { EffectId, Framework, ImplStyle } from './aiExport'
 /* ------------------------------------------------------------------ data */
 
 const { chats, data } = createChatData()
@@ -58,6 +60,20 @@ const toast = ref('')
 const sidebarView = ref<'chats' | 'settings'>('chats')
 const sidebarDir = ref<'push' | 'pop'>('push')
 const settingsEntry = ref<SettingsTab>('main')
+const exportOpen = ref(false)
+const exportEffect = ref<EffectId>('send'), exportFramework = ref<Framework>('react'), exportStyle = ref<ImplStyle>('waapi'), exportAll = ref(false)
+let exportTrigger: HTMLElement | null = null
+function openExport(){
+  if(exportOpen.value)return
+  exportTrigger=document.activeElement instanceof HTMLElement?document.activeElement:null
+  closePopups();exportOpen.value=true
+}
+function closeExport(restore=true){
+  if(!exportOpen.value)return
+  exportOpen.value=false
+  const trigger=exportTrigger;exportTrigger=null
+  if(restore)void nextTick(()=>{const fallback=document.querySelector<HTMLElement>(isMobile.value&&!mobileChatOpen.value?'[aria-label="打开主菜单"]':'[aria-label="打开 AI 复刻导出"]');(trigger?.isConnected&&trigger.getClientRects().length&&getComputedStyle(trigger).visibility!=='hidden'?trigger:fallback)?.focus()})
+}
 const isMobile = ref(false)
 const mobileChatOpen = ref(false)
 const chatDir = ref<'next' | 'prev'>('next')
@@ -264,6 +280,7 @@ watch(effectiveLevel, level => { document.documentElement.dataset.motionLevel = 
 /* ------------------------------------------------------------------ navigation */
 
 function openSettings(tab: SettingsTab = 'main') {
+  if(tab==='export'){openExport();return}
   closePopups()
   mobileChatOpen.value = false
   if (sidebarView.value === 'settings') { settingsRef.value?.go(tab); return }
@@ -646,6 +663,7 @@ function runStress() {
   notice('已追加 500 条消息 · 页面仅渲染最近 120 条')
 }
 function runDemo(key: DemoKey) {
+  closeExport(false)
   if (isMobile.value) mobileChatOpen.value = true
   if (key === 'send') void send('消息动画：从输入框飞入气泡 ✨')
   else if (key === 'incoming') simulateIncoming()
@@ -666,6 +684,7 @@ function runDemo(key: DemoKey) {
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     if (showAbout.value) showAbout.value = false
+    else if(exportOpen.value){closeExport();return}
     else if (anyPopup.value) closePopups()
     else if (reply.value) reply.value = null
     else if (sidebarView.value === 'settings') settingsRef.value?.back()
@@ -675,6 +694,7 @@ function onKey(e: KeyboardEvent) {
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault()
+    closeExport(false)
     if (sidebarView.value === 'settings') closeSettings()
     mobileChatOpen.value = false
     void nextTick(() => searchInput.value?.focus())
@@ -714,9 +734,9 @@ onBeforeUnmount(() => {
     :class="[`theme-${resolvedTheme}`, levelClass, { 'power-saving': powerSavingActive, 'mobile-chat-open': mobileChatOpen }]"
     :style="cssVars"
   >
-    <div class="workspace">
+    <div class="workspace" :class="{'export-open':exportOpen}">
       <!-- ==================== left column ==================== -->
-      <aside class="sidebar" aria-label="侧边栏">
+      <aside class="sidebar" aria-label="侧边栏" :inert="exportOpen && isMobile">
         <div class="slider">
           <Transition :name="'tab-' + sidebarDir">
             <div v-if="sidebarView === 'chats'" key="chats" class="tab chats-tab">
@@ -738,6 +758,7 @@ onBeforeUnmount(() => {
                     <button v-ripple class="menu-item" role="menuitem" @click="openSettings('main')"><Settings :size="20" /> 设置</button>
                     <button v-ripple class="menu-item" role="menuitem" @click="openSettings('animations')"><Zap :size="20" /> 动画与省电</button>
                     <button v-ripple class="menu-item" role="menuitem" @click="openSettings('lab')"><FlaskConical :size="20" /> 动效实验室</button>
+                    <button v-ripple class="menu-item" role="menuitem" @click="openExport"><FileText :size="20" /> AI 复刻导出</button>
                     <div class="menu-sep"></div>
                     <button class="menu-item" role="menuitemcheckbox" :aria-checked="resolvedTheme === 'dark'" @click.stop="toggleNight">
                       <Moon :size="20" /> 夜间模式<span class="mini-switch" :class="{ on: resolvedTheme === 'dark' }"></span>
@@ -812,13 +833,14 @@ onBeforeUnmount(() => {
               @theme="(mode, x, y) => setTheme(mode, x, y)"
               @about="showAbout = true"
               @toast="notice"
+              @export="openExport"
             />
           </Transition>
         </div>
       </aside>
 
       <!-- ==================== conversation ==================== -->
-      <section class="conversation" aria-label="聊天动效演示">
+      <section v-show="!exportOpen" class="conversation" aria-label="聊天动效演示">
         <div class="chat-wall" aria-hidden="true">
           <span v-for="(b, i) in blobs" :key="i" class="blob" :class="'blob-' + i" :style="b"></span>
           <span class="wall-pattern"></span>
@@ -839,6 +861,7 @@ onBeforeUnmount(() => {
           <div class="head-spacer"></div>
           <button v-ripple class="icon-btn" aria-label="搜索会话" title="搜索 (Ctrl+K)" @click="openSearchFromHeader"><Search :size="22" /></button>
           <a class="icon-btn" href="?workspace=1" aria-label="打开独立动效工作台" title="动效工作台"><FlaskConical :size="22" /></a>
+          <button v-ripple class="icon-btn ai-export-entry" aria-label="打开 AI 复刻导出" title="AI 复刻导出" @click="openExport"><FileText :size="22" /></button>
           <button v-ripple class="icon-btn" aria-label="打开动效设置" title="动画与省电" @click="openSettings('animations')"><Settings2 :size="22" /></button>
           <div class="menu-anchor">
             <button v-ripple class="icon-btn" aria-label="更多" :aria-expanded="headerMenu" @click="headerMenu = !headerMenu"><MoreVertical :size="22" /></button>
@@ -846,6 +869,7 @@ onBeforeUnmount(() => {
               <div v-if="headerMenu" class="btn-menu top-right" role="menu" aria-label="聊天菜单" @click="headerMenu = false">
                 <button v-ripple class="menu-item" role="menuitem" @click="openSettings('animations')"><Settings2 :size="20" /> 动画与省电</button>
                 <button v-ripple class="menu-item" role="menuitem" @click="openSettings('lab')"><FlaskConical :size="20" /> 动效实验室</button>
+                <button v-ripple class="menu-item" role="menuitem" @click="openExport"><FileText :size="20" /> AI 复刻导出</button>
                 <button v-ripple class="menu-item" role="menuitem" @click="runDemo('incoming')"><MessageCircle :size="20" /> 模拟收到消息</button>
                 <button v-ripple class="menu-item" role="menuitem" @click="runDemo('stress')"><Gauge :size="20" /> 压力测试 (+500)</button>
               </div>
@@ -953,6 +977,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </section>
+      <SettingsExport v-if="exportOpen" v-model:effect="exportEffect" v-model:framework="exportFramework" v-model:style="exportStyle" v-model:all="exportAll" @close="closeExport()" @toast="notice"/>
     </div>
 
     <!-- ==================== overlays ==================== -->

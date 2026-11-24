@@ -120,7 +120,7 @@ defineExpose({ play })
     </div>
     <div class="curve-footer">
       <code :title="css">{{ label }}</code>
-      <button class="mini-btn" type="button" :disabled="duration <= 0" @click="play"><Play :size="14" /> 预览</button>
+      <button class="mini-btn curve-preview-button" type="button" aria-label="预览曲线" :disabled="duration <= 0" @click="play"><Play :size="14" aria-hidden="true"/><span>预览</span></button>
     </div>
   </div>
 </template>

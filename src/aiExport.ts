@@ -504,3 +504,6 @@ export interface ExportableEffect {
 export function exportableEffects(): ExportableEffect[] {
   return effectSpecs().map(s => ({ id: s.id, title: s.title }))
 }
+
+/** Read-only view of the same live spec used by prompt generation. */
+export function exportEffectDetails(id:EffectId):EffectSpec {return effectSpecs().find(s=>s.id===id)!}
