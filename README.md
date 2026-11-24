@@ -122,3 +122,5 @@ MIT License。若将来直接移植 tweb 的代码，请遵守其 GPL-3.0 许可
 完整 ZIP 导出包含 HTML、Vue、React、JavaScript、CSS、Tokens、AI、配置和 motion-kit；`node scripts/verify-exports.mjs` 在临时目录安装验证用 React 依赖并构建 Vue/React 示例，不修改主项目依赖。
 
 多轨道编排：静态动效独立轨道、延迟、持续时间、缩放、时间吸附和持久化。拖拽与导出共用 attachSpringDrag。编排工程暂不支持整体导出。
+
+编排工程支持 JSON 合并导入/导出、离线 HTML、分组同步位移、独立关键帧及录制手势轨道。原轨道不覆盖，实时布局轨道暂不支持。

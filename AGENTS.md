@@ -63,3 +63,8 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - 导出门禁新增实际 Chromium 运行 Vue/React 构建产物及 ZIP 解包/CRC 校验；基准输出 80 节点 30 次 FLIP 的 rAF 分位与取消后残余动画/节点连接状态。未提供实际 JS heap 数据或 GPU 掉帧。
 
 - #8 复测 58/58、Vue/React 8/8 并合并。#8 Pages 上传产物 ID 14923067016 后立即部署查询不到，随后 API 可查到该产物；触发重试并为后续版本添加部署前唯一元数据轮询，未宣称已部署。
+
+## 工程化与发布候选批次
+- PR #9 CI 64/64，Vue/React 16 个构建及运行验收，ZIP 22 文件 CRC 成功；#8 Pages 重试成功。基准 80 节点 30 次 FLIP：Chromium P50/P95 18.1/29.4ms，Firefox 17/30ms，WebKit 24/42ms，三者残留动画 0、节点全脱离。数据来自 CI，不是 GPU 或 heap 实测。
+- 工程格式 version:1，兼容原数组存储；导入采用追加及新 ID，最多 24 条，不覆盖现有轨道。新增组同步位移、独立关键帧、录制手势轨道、编排 JSON 与离线 HTML。实时布局轨道仍不支持。
+- 可折叠面板、宽度拖动与键盘调整（宽度持久化），默认界面卡片、新通知场景；移动端可收起面板。
