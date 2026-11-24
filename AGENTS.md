@@ -52,3 +52,14 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 ## PR #8 质量收口
 - 首次 CI：Vue/React 独立构建成功；浏览器 57/58，Firefox 原 Vite 页面 setContent 后出现导航竞争。改用独立 data URL 新页面验证 HTML，保留真实交互断言。
 - Pages #7 两次部署失败（产物元数据缺失、同名重复），部署产物按 run_id/run_attempt 唯一命名，避免重试复用旧名称。待新 CI 和部署验证。
+
+## 编排与一致性批次
+- PR #8 首次 CI 实际截图六张：三浏览器桌面结构一致，移动页过长，原生滑块差异、预览空旷、刻度对齐需改进。新增统一滑块、界面卡片预览、刻度边距及紧凑移动导航。
+- 独立编排模式及 motion-lab-composition-v1 键；最多 24 条静态轨道，各自类型、延迟、时长、位移、静音、排序、缩放和吸附。暂不支持轨道导出或手势轨道。
+- attachSpringDrag 共享预览/导出运行时；重按读取视觉矩阵并承接位置，释放速度按近期指针采样估计；不宣称所有转场的速度连续。
+
+- 编排轨道可拖动延迟并吸附；参数检查器拆分为 ParameterPanel，隐藏无关参数；聊天 FPS 生命周期拆分 useFps。编排模式独立检查区，旧单动效/资产不变。
+
+- 导出门禁新增实际 Chromium 运行 Vue/React 构建产物及 ZIP 解包/CRC 校验；基准输出 80 节点 30 次 FLIP 的 rAF 分位与取消后残余动画/节点连接状态。未提供实际 JS heap 数据或 GPU 掉帧。
+
+- #8 复测 58/58、Vue/React 8/8 并合并。#8 Pages 上传产物 ID 14923067016 后立即部署查询不到，随后 API 可查到该产物；触发重试并为后续版本添加部署前唯一元数据轮询，未宣称已部署。

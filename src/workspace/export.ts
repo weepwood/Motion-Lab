@@ -6,7 +6,7 @@ export const extensionFor=(format:Format)=>extensions[format]
 function interactionBody(c:Config){
   const opts=JSON.stringify({duration:c.duration,easing:easingOf(c)})
   return `// Copy packages/motion to ./motion-kit, or change the import path.
-import { captureLayout, animateLayout, cancelLayout, drag, play } from "${library}";
+import { captureLayout, animateLayout, cancelLayout, attachSpringDrag } from "${library}";
 function mountMotion(root) {
   const options = ${opts};
   const effect = ${JSON.stringify(c.effect)};
@@ -23,8 +23,7 @@ function mountMotion(root) {
     el.dataset.motionItem = ""; el.classList.add("motion-item");
     root.append(el); return el;
   });
-  let expanded = false, detach, returning = null;
-  const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let expanded = false, detach;
   function run() {
     const first = captureLayout(items);
     if(effect === "flip") {
@@ -38,15 +37,10 @@ function mountMotion(root) {
     animateLayout(first,options);
   }
   if(effect === "drag") {
-    const el = items[0]; let x=0,y=0;
-    detach = drag(el,{
-      onStart: () => { returning?.cancel(); x=0; y=0; },
-      onUpdate: p => {x=p.dx;y=p.dy;el.style.transform="translate("+x+"px,"+y+"px)"},
-      onEnd: () => { el.style.transform=""; if(!reduced()) returning=play(el,[{transform:"translate("+x+"px,"+y+"px)"},{transform:"none"}],options.duration,options.easing); }
-    });
+    detach = attachSpringDrag(items[0], { duration: options.duration });
   } else { root.append(button); button.addEventListener("click",run); }
   return () => {
-    detach?.(); returning?.cancel(); cancelLayout(items);
+    detach?.(); cancelLayout(items);
     button.removeEventListener("click",run); button.remove();
     items.forEach(el=>el.remove()); root.style.touchAction=previousTouch;
     root.style.display=previousDisplay; root.style.gap=previousGap;

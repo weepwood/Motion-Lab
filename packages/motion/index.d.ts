@@ -118,3 +118,5 @@ export declare function staggerIn(elements: Iterable<Element>, options?: LayoutO
 export declare function cancelLayout(elements: Iterable<Element>): void
 
 export declare function physicalSpringFrames(from:number,to:number,options?:{mass?:number;stiffness?:number;damping?:number;velocity?:number;duration?:number;samples?:number}):{offset:number;value:number}[]
+
+export declare function attachSpringDrag(el:HTMLElement,options?:{duration?:number;onRecord?:(samples:{t:number;x:number;y:number}[])=>void;onInterrupt?:()=>void}):()=>void
