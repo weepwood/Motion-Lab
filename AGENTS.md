@@ -85,3 +85,6 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - 收口分支将应用和 lockfile 版本同步为 3.4.0，属于待验证的发布提交；未创建正式 tag/Release。保持独立 motion-kit 的版本不变（未单独发布）。
 
 - 收口复查：独立布局轨道传递稳定对象而非逐帧新数组；组合运行时统一 ResizeObserver 与卸载清理，批量布局写入，物理动画 settle 后释放采样缓存。新增时间轴 seek 不重建 DOM 的回归。
+
+## PR #11 发布质量修复
+- 最新 CI 85/88，导出工程构建运行及 23+8 ZIP CRC 全通过。三浏览器共同失败为编排布局测试：独立预览先 seek 到 160ms，组合预览沿用此时间，原断言从中间态比较末态且选择最终 DOM 首元素。改为先 seek 0、验证动画实际时间、固定被移动对象并比较完整行程，保留 >10px 实际几何断言。等待完整复测，不提前发布。
