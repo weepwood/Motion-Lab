@@ -57,3 +57,5 @@ Node 22；npm ci；npm run check:pkg；npm run build；npx playwright install ch
 - PR #8 首次 CI 实际截图六张：三浏览器桌面结构一致，移动页过长，原生滑块差异、预览空旷、刻度对齐需改进。新增统一滑块、界面卡片预览、刻度边距及紧凑移动导航。
 - 独立编排模式及 motion-lab-composition-v1 键；最多 24 条静态轨道，各自类型、延迟、时长、位移、静音、排序、缩放和吸附。暂不支持轨道导出或手势轨道。
 - attachSpringDrag 共享预览/导出运行时；重按读取视觉矩阵并承接位置，释放速度按近期指针采样估计；不宣称所有转场的速度连续。
+
+- 编排轨道可拖动延迟并吸附；参数检查器拆分为 ParameterPanel，隐藏无关参数；聊天 FPS 生命周期拆分 useFps。编排模式独立检查区，旧单动效/资产不变。

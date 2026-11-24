@@ -24,7 +24,7 @@ async function prepare(){const token=++generation;clear();await nextTick();if(to
    const el=objects()[0];if(el){dragged=el;detach=attachSpringDrag(el,{duration:props.config.duration,onRecord:samples=>{recorded.value=samples},onInterrupt:()=>recordingPlayback?.cancel()})}
  }
 }
-function replayGesture(){const el=objects()[0];if(!el||recorded.value.length<2||matchMedia('(prefers-reduced-motion: reduce)').matches)return;recordingPlayback?.cancel();recordingPlayback=play(el,gestureFrames(recorded.value),Math.max(1,recorded.value.at(-1)?.t??0),'linear');}
+function replayGesture(){const el=objects()[0];if(!el||recorded.value.length<2||matchMedia('(prefers-reduced-motion: reduce)').matches)return;el.getAnimations().forEach(a=>a.cancel());recordingPlayback=play(el,gestureFrames(recorded.value),Math.max(1,recorded.value.at(-1)?.t??0),'linear');}
 async function replay(){
  if(!root.value)return
  const before=captureLayout(objects())

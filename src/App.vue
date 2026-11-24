@@ -8,6 +8,7 @@ import {
 import { vRipple } from './ripple'
 import { createChatData, PAGE, type Message, type Chat } from './chat/data'
 import { buildRows, dayDiff } from './chat/rows'
+import { useFps } from './chat/useFps'
 import { createReplySwipe } from './chat/replySwipe'
 import { burst, cancelFlight, flyBubble, flyEmoji, revealFrom, play, settle } from './motion'
 import { createScrollSaver } from '../packages/motion/index.js'
@@ -67,8 +68,7 @@ const showEmoji = ref(false)
 const showAbout = ref(false)
 const msgMenu = ref<{ id: number; x: number; y: number; origin: string } | null>(null)
 
-const fps = ref(0)
-const worstFrame = ref(0)
+const {fps,worstFrame}=useFps(()=>settings.showFps)
 
 const timers = new Set<ReturnType<typeof setTimeout>>()
 function later(fn: () => void, ms: number) {
@@ -672,34 +672,6 @@ function runDemo(key: DemoKey) {
 
 /* ------------------------------------------------------------------ fps meter */
 
-let fpsRaf = 0
-function startFps() {
-  let last = performance.now()
-  let frames = 0
-  let acc = 0
-  let worst = 0
-  const loop = (now: number) => {
-    const dt = now - last
-    last = now
-    frames++
-    acc += dt
-    worst = Math.max(worst, dt)
-    if (acc >= 500) {
-      fps.value = Math.round((frames * 1000) / acc)
-      worstFrame.value = Math.round(worst)
-      frames = 0
-      acc = 0
-      worst = 0
-    }
-    fpsRaf = requestAnimationFrame(loop)
-  }
-  fpsRaf = requestAnimationFrame(loop)
-}
-watch(() => settings.showFps, on => {
-  cancelAnimationFrame(fpsRaf)
-  if (on) startFps()
-}, { immediate: true })
-
 /* ------------------------------------------------------------------ keyboard & lifecycle */
 
 function onKey(e: KeyboardEvent) {
@@ -742,7 +714,6 @@ onBeforeUnmount(() => {
   timers.forEach(t => clearTimeout(t))
   timers.clear()
   if (toastTimer) clearTimeout(toastTimer)
-  cancelAnimationFrame(fpsRaf)
   cancelFlight()
 })
 </script>
